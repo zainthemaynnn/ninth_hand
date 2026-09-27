@@ -1,15 +1,26 @@
 use bevy::{mesh::ExtrusionBuilder, prelude::*};
+use bevy_tweening::{AnimTarget, RepeatCount, RepeatStrategy, Tween, TweenAnim};
 use std::{
-    collections::HashMap,
-    f32::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_6, PI, SQRT_3},
-    ops::Add,
+    collections::HashMap, f32::consts::{FRAC_PI_2, FRAC_PI_6, PI, SQRT_3}, time::Duration,
 };
+
+use crate::asset::{GameAssetLoadState, MaterialEmissiveLens};
 
 pub struct FieldPlugin;
 
 impl Plugin for FieldPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<HexMesh>().init_resource::<Field>();
+        app.init_resource::<HexMesh>()
+            .init_resource::<SelectedCellMaterial>()
+            .init_resource::<Field>()
+            .add_systems(
+                OnEnter(GameAssetLoadState::AssetLoading),
+                animate_selected_cell_material,
+            )
+            .add_observer(select_cell_on_click)
+            .add_observer(deselect_preselected_cell)
+            .add_observer(animate_selected_cell)
+            .add_observer(deanimate_deselected_cell);
     }
 }
 
@@ -41,7 +52,7 @@ impl HexCoord {
     }
 }
 
-impl Add for HexCoord {
+impl std::ops::Add for HexCoord {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
@@ -52,7 +63,7 @@ impl Add for HexCoord {
     }
 }
 
-impl<'a, 'b> Add<&'b HexCoord> for &'a HexCoord {
+impl<'a, 'b> std::ops::Add<&'b HexCoord> for &'a HexCoord {
     type Output = HexCoord;
 
     fn add(self, rhs: &'b HexCoord) -> Self::Output {
@@ -74,7 +85,7 @@ pub struct OccupyingCell(pub Entity);
 pub struct OccupiedByUnit(Entity);
 
 #[derive(Component, Default)]
-#[require(HexCoord)]
+#[require(HexCoord, Pickable)]
 pub struct FieldCell;
 
 #[derive(Resource)]
@@ -89,6 +100,21 @@ impl FromWorld for HexMesh {
         let handle = meshes.add(hex_mesh);
 
         HexMesh(handle)
+    }
+}
+
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct SelectedCell;
+
+#[derive(Resource)]
+pub struct SelectedCellMaterial(pub Handle<StandardMaterial>);
+
+impl FromWorld for SelectedCellMaterial {
+    fn from_world(world: &mut World) -> Self {
+        let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
+        let handle = materials.add(StandardMaterial::default());
+        SelectedCellMaterial(handle)
     }
 }
 
@@ -172,6 +198,70 @@ pub fn load_field(
     }
 
     info!("loaded hex cells {:?}", &coords);
+}
+
+fn animate_selected_cell_material(mut commands: Commands, material: Res<SelectedCellMaterial>) {
+    error!("tweening material");
+    let selection_tween = Tween::new(
+        EaseFunction::SineInOut,
+        Duration::from_millis(1000),
+        MaterialEmissiveLens {
+            start: LinearRgba::BLACK,
+            end: LinearRgba::RED,
+        },
+    )
+    .with_repeat(RepeatCount::Infinite, RepeatStrategy::MirroredRepeat);
+
+    commands.spawn((
+        TweenAnim::new(selection_tween),
+        AnimTarget::asset(material.0.id()),
+    ));
+}
+
+fn select_cell_on_click(
+    trigger: On<Pointer<Click>>,
+    cell_query: Query<Option<&SelectedCell>, With<FieldCell>>,
+    mut commands: Commands,
+) {
+    debug!("select");
+    if let Ok(selected) = cell_query.get(trigger.entity) {
+        if selected.is_none() {
+            commands.entity(trigger.entity).insert(SelectedCell);
+        } else {
+            commands.entity(trigger.entity).remove::<SelectedCell>();
+        }
+    }
+}
+
+fn deselect_preselected_cell(
+    trigger: On<Add, SelectedCell>,
+    mut commands: Commands,
+    selected_query: Query<Entity, With<SelectedCell>>,
+) {
+    debug!("deselect");
+    for e_old in selected_query {
+        if e_old == trigger.entity {
+            continue;
+        }
+
+        commands.entity(e_old).remove::<SelectedCell>();
+    }
+}
+
+fn animate_selected_cell(
+    trigger: On<Add, SelectedCell>,
+    mut commands: Commands,
+    material: Res<SelectedCellMaterial>,
+) {
+    commands
+        .entity(trigger.entity)
+        .insert(MeshMaterial3d::from(material.0.clone()));
+}
+
+fn deanimate_deselected_cell(trigger: On<Remove, SelectedCell>, mut commands: Commands) {
+    commands
+        .entity(trigger.entity)
+        .insert(MeshMaterial3d::<StandardMaterial>::default());
 }
 
 #[cfg(test)]

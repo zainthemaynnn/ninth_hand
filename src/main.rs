@@ -4,7 +4,10 @@ use bevy_asset_loader::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::ActionPlugin, asset::{GameAssetLoadState, NineAssetPlugin}, field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field}, unit::{Unit, UnitPlugin},
+    actions::ActionPlugin,
+    asset::{GameAssetLoadState, NineAssetPlugin},
+    field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
+    unit::{Unit, UnitPlugin},
 };
 
 pub mod actions;
@@ -26,12 +29,15 @@ struct NineAssets {
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugins(NineAssetPlugin)
-        .add_plugins(FieldPlugin)
-        .add_plugins(UnitPlugin)
-        .add_plugins(ActionPlugin)
-        .add_plugins(TweeningPlugin)
+        .add_plugins((
+            DefaultPlugins,
+            NineAssetPlugin,
+            FieldPlugin,
+            UnitPlugin,
+            ActionPlugin,
+            TweeningPlugin,
+            MeshPickingPlugin,
+        ))
         .configure_loading_state(
             LoadingStateConfig::new(GameAssetLoadState::AssetLoading)
                 .load_collection::<NineAssets>(),

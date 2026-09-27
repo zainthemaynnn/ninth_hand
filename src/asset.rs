@@ -1,5 +1,6 @@
-use bevy::prelude::*;
+use bevy::{math::VectorSpace, prelude::*};
 use bevy_asset_loader::prelude::*;
+use bevy_tweening::Lens;
 
 pub struct NineAssetPlugin;
 
@@ -17,4 +18,17 @@ pub enum GameAssetLoadState {
     #[default]
     AssetLoading,
     Next,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct MaterialEmissiveLens {
+    pub start: LinearRgba,
+    pub end: LinearRgba,
+}
+
+impl Lens<StandardMaterial> for MaterialEmissiveLens {
+    fn lerp(&mut self, mut target: Mut<StandardMaterial>, ratio: f32) {
+        debug!(ratio);
+        target.emissive = self.start.lerp(self.end, ratio);
+    }
 }
