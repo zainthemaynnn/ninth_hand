@@ -1,25 +1,20 @@
 #![feature(more_float_constants)]
 use bevy::{color::palettes::css::SILVER, prelude::*};
 use bevy_asset_loader::prelude::*;
+use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
-    unit::{Unit, UnitPlugin},
+    actions::ActionPlugin, asset::{GameAssetLoadState, NineAssetPlugin}, field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field}, unit::{Unit, UnitPlugin},
 };
 
 pub mod actions;
+pub mod asset;
 pub mod damage;
 pub mod field;
 pub mod intents;
-pub mod orthogon;
+pub mod maw;
+pub mod symmetra;
 pub mod unit;
-
-#[derive(Clone, Eq, PartialEq, Debug, Hash, Default, States)]
-enum GameAssetLoadState {
-    #[default]
-    AssetLoading,
-    Next,
-}
 
 #[derive(AssetCollection, Resource)]
 struct NineAssets {
@@ -32,12 +27,13 @@ struct NineAssets {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(NineAssetPlugin)
         .add_plugins(FieldPlugin)
         .add_plugins(UnitPlugin)
-        .init_state::<GameAssetLoadState>()
-        .add_loading_state(
-            LoadingState::new(GameAssetLoadState::AssetLoading)
-                .continue_to_state(GameAssetLoadState::Next)
+        .add_plugins(ActionPlugin)
+        .add_plugins(TweeningPlugin)
+        .configure_loading_state(
+            LoadingStateConfig::new(GameAssetLoadState::AssetLoading)
                 .load_collection::<NineAssets>(),
         )
         .add_systems(

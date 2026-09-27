@@ -13,7 +13,7 @@ impl Plugin for UnitPlugin {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 #[require(
     Health,
     Resist,
@@ -23,8 +23,18 @@ impl Plugin for UnitPlugin {
 )]
 pub struct Unit;
 
+pub struct UnitDesc {
+    pub name: &'static str,
+    pub passive: &'static str,
+}
+
 #[derive(Resource)]
-pub struct ActiveUnits;
+pub struct ActiveUnits(pub Vec<UnitType>);
+
+pub enum UnitType {
+	Maw,
+	Symmetra,
+}
 
 pub fn reposition(
     field: Res<Field>,
