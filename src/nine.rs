@@ -7,27 +7,27 @@ use crate::{
 
 #[derive(Component)]
 #[require(Unit)]
-pub struct Maw;
+pub struct Nine;
 
-impl Maw {
+impl Nine {
     const DESC: UnitDesc = UnitDesc {
-        name: "Maw",
-        passive: "Consume -- When Maw kills an enemy, it gets an additional action.",
+        name: "Nine",
+        passive: "Consume -- When killing an enemy, gets an additional action.",
     };
 }
 
 #[derive(Component)]
 #[require(
-	Action { name: "Chomp", description: "Damage 5 front" },
+	Action { name: "Crush", description: "Damage 5 front" },
 	Damage,
 	FrontTarget,
 	SingleTarget,
 	LineOfSight,
 	CardArt("abyss"),
 )]
-pub struct Chomp;
+pub struct Crush;
 
-impl Chomp {
+impl Crush {
     fn play() {
         todo!();
     }
@@ -35,7 +35,7 @@ impl Chomp {
 
 #[derive(Component)]
 #[require(
-    Action { name: "Chew", description: "Damage 1 front 3x" },
+    Action { name: "Slap", description: "Damage 1 front 3x" },
     Damage,
     FrontTarget,
     SingleTarget,
@@ -43,39 +43,45 @@ impl Chomp {
     MultiHit,
     CardArt("abyss"),
 )]
-pub struct Chew;
+pub struct Slap;
 
-impl Chew {
+impl Slap {
     fn play() {
         todo!();
     }
 }
 
 #[derive(Component)]
-#[require(Action, Debuff, FrontTarget, SingleTarget, LineOfSight)]
-pub struct Lick;
+#[require(
+    Action { name: "Gaze", description: "Mark 1" },
+    Debuff,
+    FrontTarget,
+    SingleTarget,
+    LineOfSight,
+    CardArt("abyss"),
+)]
+pub struct Gaze;
 
-impl Lick {
-    const ACTION: Action = Action {
-        name: "Lick",
-        description: "Weakness 3 front",
-    };
-
+impl Gaze {
     fn play() {
         todo!();
     }
 }
 
 #[derive(Component)]
-#[require(Action, Damage, FrontTarget, SingleTarget, LineOfSight)]
+#[require(
+    Action {
+        name: "Swallow",
+        description: "Move to front. Kill an enemy with 6 HP or less.",
+    },
+    Damage,
+    FrontTarget,
+    SingleTarget,
+    LineOfSight,
+)]
 pub struct Swallow;
 
 impl Swallow {
-    const ACTION: Action = Action {
-        name: "Swallow",
-        description: "Move to front. Kill an enemy with 6 HP or less.",
-    };
-
     fn play() {
         todo!();
     }

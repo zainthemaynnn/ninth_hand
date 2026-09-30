@@ -1,8 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    damage::{DamageBuffer, Health, Resist},
-    field::{Field, HexCoord, OccupyingCell},
+    damage::{DamageBuffer, Health, Resist}, field::{Field, HexCoord, OccupyingCell}, turn::Player,
 };
 
 pub struct UnitPlugin;
@@ -37,7 +36,7 @@ pub enum UnitType {
 }
 
 pub fn reposition(
-    field: Res<Field>,
+    field: Res<Field<Player>>,
     q_moved_units: Query<(&mut Transform, &OccupyingCell), Changed<OccupyingCell>>,
     q_hexcoord: Query<&HexCoord>,
 ) {

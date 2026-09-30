@@ -1,13 +1,12 @@
 #![feature(more_float_constants)]
+use std::f32::consts::PI;
+
 use bevy::{color::palettes::css::SILVER, prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::ActionPlugin,
-    asset::{GameAssetLoadState, NineAssetPlugin},
-    field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
-    unit::{Unit, UnitPlugin},
+    actions::ActionPlugin, asset::{GameState, NineAssetPlugin}, field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field}, turn::{Cpu, Player, TurnPlugin}, ui::NineUiPlugin, unit::{Unit, UnitPlugin},
 };
 
 pub mod actions;
@@ -15,8 +14,10 @@ pub mod asset;
 pub mod damage;
 pub mod field;
 pub mod intents;
-pub mod maw;
+pub mod nine;
 pub mod symmetra;
+pub mod turn;
+pub mod ui;
 pub mod unit;
 
 #[derive(AssetCollection, Resource)]
@@ -37,42 +38,61 @@ fn main() {
             ActionPlugin,
             TweeningPlugin,
             MeshPickingPlugin,
+            TurnPlugin,
+            NineUiPlugin,
         ))
         .configure_loading_state(
-            LoadingStateConfig::new(GameAssetLoadState::AssetLoading)
-                .load_collection::<NineAssets>(),
+            LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
         )
+        .insert_resource(MeshPickingSettings {
+            require_markers: true,
+            ray_cast_visibility: RayCastVisibility::Any,
+        })
         .add_systems(
-            OnEnter(GameAssetLoadState::Next),
+            OnEnter(GameState::InGame),
             (
                 (|| {
-                    vec![
-                        HexCoord::new(-2, 1),
-                        HexCoord::new(-2, 2),
-                        HexCoord::new(-2, 3),
-                        HexCoord::new(-2, 4),
-                        HexCoord::new(-1, 1),
-                        HexCoord::new(-1, 2),
-                        HexCoord::new(-1, 3),
-                        HexCoord::new(0, 0),
-                        HexCoord::new(0, 1),
-                        HexCoord::new(0, 2),
-                        HexCoord::new(0, 3),
-                        HexCoord::new(1, 0),
-                        HexCoord::new(1, 1),
-                        HexCoord::new(1, 2),
-                        HexCoord::new(2, -1),
-                        HexCoord::new(2, 0),
-                        HexCoord::new(2, 1),
-                        HexCoord::new(2, 2),
-                    ]
+                    (
+                        Transform::from_rotation(Quat::from_rotation_y(PI)),
+                        field_coords(),
+                    )
                 })
-                .pipe(load_field),
+                .pipe(load_field::<Player>),
+                (|| {
+                    (
+                        Transform::from_xyz(0.0, 0.0, -20.0).looking_at(Vec3::ZERO, Vec3::Y),
+                        field_coords(),
+                    )
+                })
+                .pipe(load_field::<Cpu>),
                 entry,
             )
                 .chain(),
         )
         .run();
+}
+
+fn field_coords() -> Vec<HexCoord> {
+    vec![
+        HexCoord::new(-2, 1),
+        HexCoord::new(-2, 2),
+        HexCoord::new(-2, 3),
+        HexCoord::new(-2, 4),
+        HexCoord::new(-1, 1),
+        HexCoord::new(-1, 2),
+        HexCoord::new(-1, 3),
+        HexCoord::new(0, 0),
+        HexCoord::new(0, 1),
+        HexCoord::new(0, 2),
+        HexCoord::new(0, 3),
+        HexCoord::new(1, 0),
+        HexCoord::new(1, 1),
+        HexCoord::new(1, 2),
+        HexCoord::new(2, -1),
+        HexCoord::new(2, 0),
+        HexCoord::new(2, 1),
+        HexCoord::new(2, 2),
+    ]
 }
 
 fn entry(
@@ -81,7 +101,8 @@ fn entry(
     mut materials: ResMut<Assets<StandardMaterial>>,
     gltfs: Res<Assets<Gltf>>,
     nine_assets: Res<NineAssets>,
-    field: Res<Field>,
+    player_field: Res<Field<Player>>,
+    cpu_field: Res<Field<Cpu>>,
 ) {
     commands.spawn((
         PointLight {
@@ -101,11 +122,12 @@ fn entry(
 
     commands.spawn((
         Camera3d::default(),
+        MeshPickingCamera,
         Transform::from_xyz(0.0, 7., 14.0).looking_at(Vec3::new(0., 1., 0.), Vec3::Y),
     ));
 
     let gltf = gltfs.get(&nine_assets.nine).unwrap();
     let h_scene = gltf.default_scene.as_ref().unwrap().clone();
-    let e_cell = field.cells.get(&HexCoord::new(0, 0)).unwrap();
+    let e_cell = player_field.cells.get(&HexCoord::new(0, 0)).unwrap();
     commands.spawn((WorldAssetRoot(h_scene), Unit, OccupyingCell(*e_cell)));
 }

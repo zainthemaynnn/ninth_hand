@@ -3586,6 +3586,7 @@ dependencies = [
  "bevy",
  "bevy_asset_loader",
  "bevy_tweening",
+ "noisy_bevy",
  "num-derive 0.5.1",
  "num-traits",
  "rand",
@@ -3601,6 +3602,15 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
+]
+
+[[package]]
+name = "noisy_bevy"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5beb988d6e2d6ed2f307e4d1a867a5f0fc5702f59c25076228b0c204df0117f"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]

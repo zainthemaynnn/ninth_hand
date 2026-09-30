@@ -1,10 +1,10 @@
 use bevy::{mesh::ExtrusionBuilder, prelude::*};
 use bevy_tweening::{AnimTarget, RepeatCount, RepeatStrategy, Tween, TweenAnim};
 use std::{
-    collections::HashMap, f32::consts::{FRAC_PI_2, FRAC_PI_6, PI, SQRT_3}, time::Duration,
+    collections::HashMap, f32::consts::{FRAC_PI_2, FRAC_PI_6, PI, SQRT_3}, marker::PhantomData, time::Duration,
 };
 
-use crate::asset::{GameAssetLoadState, MaterialEmissiveLens};
+use crate::{asset::{GameState, MaterialEmissiveLens}, turn::{Cpu, Player, Team}};
 
 pub struct FieldPlugin;
 
@@ -12,9 +12,10 @@ impl Plugin for FieldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<HexMesh>()
             .init_resource::<SelectedCellMaterial>()
-            .init_resource::<Field>()
+            .init_resource::<Field<Player>>()
+            .init_resource::<Field<Cpu>>()
             .add_systems(
-                OnEnter(GameAssetLoadState::AssetLoading),
+                OnEnter(GameState::AssetLoading),
                 animate_selected_cell_material,
             )
             .add_observer(select_cell_on_click)
@@ -120,13 +121,14 @@ impl FromWorld for SelectedCellMaterial {
 
 /// Contains all the `FieldCell`s on the field, mapped by `HexCoord`.
 #[derive(Resource)]
-pub struct Field {
+pub struct Field<T: Team> {
     pub cells: HashMap<HexCoord, Entity>,
     pub origin_transform: Transform,
     pub hex_radius: f32,
+    pub phantom_data: PhantomData<T>,
 }
 
-impl Default for Field {
+impl<T: Team> Default for Field<T> {
     fn default() -> Self {
         Self {
             hex_radius: 2.0,
@@ -137,11 +139,12 @@ impl Default for Field {
                 0.0,
                 0.0,
             )),
+            phantom_data: PhantomData::default(),
         }
     }
 }
 
-impl Field {
+impl<T: Team> Field<T> {
     pub fn add_cell(&mut self, e_cell: Entity, position: HexCoord) {
         self.cells.insert(position, e_cell);
     }
@@ -177,12 +180,14 @@ impl Field {
     }
 }
 
-pub fn load_field(
-    In(coords): In<Vec<HexCoord>>,
+pub fn load_field<T: Team>(
+    In((tf, coords)): In<(Transform, Vec<HexCoord>)>,
     mut commands: Commands,
-    mut field: ResMut<Field>,
+    mut field: ResMut<Field<T>>,
     hex_mesh: Res<HexMesh>,
 ) {
+    field.origin_transform = tf;
+
     let h_mesh = &hex_mesh.0;
     for coord in &coords {
         let e_cell = commands

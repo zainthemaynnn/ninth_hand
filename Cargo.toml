@@ -10,6 +10,7 @@ num-traits = "0.2"
 num-derive = "0.5"
 rand = "0.10.3"
 bevy_tweening = "0.16.0"
+noisy_bevy = "0.14.0"
 
 [profile.dev]
 opt-level = 1

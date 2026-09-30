@@ -8,7 +8,7 @@ use bevy_tweening::{
 };
 use rand::seq::SliceRandom;
 
-use crate::asset::GameAssetLoadState;
+use crate::asset::GameState;
 
 const CARD_STICKOUT: Val = Val::Percent(50.0);
 
@@ -16,16 +16,16 @@ pub struct ActionPlugin;
 
 impl Plugin for ActionPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameAssetLoadState::Next), set_action_bar)
+        app.add_systems(OnEnter(GameState::InGame), set_action_bar)
             .add_systems(
                 Update,
                 (update_action_bar, select_deselect_card)
-                    .run_if(in_state(GameAssetLoadState::Next)),
+                    .run_if(in_state(GameState::InGame)),
             )
             .add_observer(select_card_animation)
             .add_observer(deselect_card_animation)
             .configure_loading_state(
-                LoadingStateConfig::new(GameAssetLoadState::AssetLoading)
+                LoadingStateConfig::new(GameState::AssetLoading)
                     .load_collection::<CardAssets>(),
             );
     }
@@ -144,8 +144,8 @@ pub fn set_action_bar(mut commands: Commands) {
         BackgroundColor(Color::BLACK.with_alpha(0.2)),
     ));
 
-    commands.spawn((crate::maw::Chomp, AvailableAction));
-    commands.spawn((crate::maw::Chew, AvailableAction));
+    commands.spawn((crate::nine::Crush, AvailableAction));
+    commands.spawn((crate::nine::Slap, AvailableAction));
 }
 
 pub fn update_action_bar(
