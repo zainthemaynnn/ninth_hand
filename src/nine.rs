@@ -1,12 +1,11 @@
 use bevy::prelude::*;
 
 use crate::{
-    actions::{Action, CardArt, tags::*},
-    unit::{Unit, UnitDesc},
+    actions::{Action, CardArt, tags::*}, field::Field, turn::{Ally, Cpu, Player, Rival, TurnState}, unit::{Unit, UnitDesc},
 };
 
 #[derive(Component)]
-#[require(Unit)]
+#[require(Unit, Player)]
 pub struct Nine;
 
 impl Nine {
@@ -15,6 +14,14 @@ impl Nine {
         passive: "Consume -- When killing an enemy, gets an additional action.",
     };
 }
+
+#[derive(Component, Debug)]
+#[relationship(relationship_target = HandOwnedBy)]
+pub struct OwnsHand(pub Entity);
+
+#[derive(Component, Debug)]
+#[relationship_target(relationship = OwnsHand)]
+pub struct HandOwnedBy(Entity);
 
 #[derive(Component)]
 #[require(
@@ -28,7 +35,13 @@ impl Nine {
 pub struct Crush;
 
 impl Crush {
-    fn play() {
+    fn play(
+        ally_field: Res<Field<Player>>,
+        rival_field: Res<Field<Cpu>>,
+        mut turn_state: ResMut<NextState<TurnState>>,
+        unit_query: Query<(&OwnsHand), With<Nine>>,
+        mut hand_query: Query<(&mut Transform,)>,
+    ) {
         todo!();
     }
 }

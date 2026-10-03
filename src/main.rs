@@ -15,6 +15,7 @@ use crate::{
     damage::DamagePlugin,
     enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
     field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
+    nine::Nine,
     turn::{Cpu, Player, TurnPlugin},
     ui::NineUiPlugin,
     unit::{Unit, UnitPlugin},
@@ -42,7 +43,13 @@ struct NineAssets {
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(GltfPlugin {
+                convert_coordinates: GltfConvertCoordinates {
+                    rotate_scene_entity: true,
+                    rotate_meshes: false,
+                },
+                ..default()
+            }),
             NineAssetPlugin,
             FieldPlugin,
             UnitPlugin,
@@ -66,7 +73,7 @@ fn main() {
             (
                 (|| {
                     (
-                        Transform::from_rotation(Quat::from_rotation_y(PI)),
+                        Transform::from_xyz(0.0, 0.0, 20.0).looking_at(Vec3::ZERO, Vec3::Y),
                         field_coords(),
                     )
                 })
@@ -88,23 +95,23 @@ fn main() {
 fn field_coords() -> Vec<HexCoord> {
     vec![
         HexCoord::new(-2, 1),
-        HexCoord::new(-2, 2),
-        HexCoord::new(-2, 3),
-        HexCoord::new(-2, 4),
-        HexCoord::new(-1, 1),
-        HexCoord::new(-1, 2),
-        HexCoord::new(-1, 3),
+        HexCoord::new(-2, 0),
+        HexCoord::new(-2, -1),
+        HexCoord::new(-2, -2),
+        HexCoord::new(-1, 0),
+        HexCoord::new(-1, -1),
+        HexCoord::new(-1, -2),
         HexCoord::new(0, 0),
-        HexCoord::new(0, 1),
-        HexCoord::new(0, 2),
-        HexCoord::new(0, 3),
-        HexCoord::new(1, 0),
-        HexCoord::new(1, 1),
-        HexCoord::new(1, 2),
+        HexCoord::new(0, -1),
+        HexCoord::new(0, -2),
+        HexCoord::new(0, -3),
+        HexCoord::new(1, -1),
+        HexCoord::new(1, -2),
+        HexCoord::new(1, -3),
         HexCoord::new(2, -1),
-        HexCoord::new(2, 0),
-        HexCoord::new(2, 1),
-        HexCoord::new(2, 2),
+        HexCoord::new(2, -2),
+        HexCoord::new(2, -3),
+        HexCoord::new(2, -4),
     ]
 }
 
@@ -114,8 +121,10 @@ fn entry(
     mut materials: ResMut<Assets<StandardMaterial>>,
     gltfs: Res<Assets<Gltf>>,
     nine_assets: Res<NineAssets>,
+    enemy_assets: Res<EnemyAssets>,
     player_field: Res<Field<Player>>,
     cpu_field: Res<Field<Cpu>>,
+    tf_query: Query<&GlobalTransform>,
 ) {
     commands.spawn((
         PointLight {
@@ -136,11 +145,20 @@ fn entry(
     commands.spawn((
         Camera3d::default(),
         MeshPickingCamera,
-        Transform::from_xyz(0.0, 7., 14.0).looking_at(Vec3::new(0., 1., 0.), Vec3::Y),
+        Transform::from_xyz(20.0, 40.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
     let gltf = gltfs.get(&nine_assets.nine).unwrap();
     let h_scene = gltf.default_scene.as_ref().unwrap().clone();
     let e_cell = player_field.cells.get(&HexCoord::new(0, 0)).unwrap();
-    commands.spawn((WorldAssetRoot(h_scene), Unit, OccupyingCell(*e_cell)));
+    commands.spawn((WorldAssetRoot(h_scene), Nine, OccupyingCell(*e_cell)));
+
+    let e_cell = cpu_field.cells.get(&HexCoord::new(0, 0)).unwrap();
+    dbg!(tf_query.get(*e_cell));
+    dbg!(cpu_field.origin_transform);
+    commands.spawn((
+        WorldAssetRoot(enemy_assets.mortal.clone()),
+        Mortal,
+        OccupyingCell(*e_cell),
+    ));
 }

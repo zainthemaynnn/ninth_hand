@@ -1,14 +1,19 @@
 use bevy::prelude::*;
 
 use crate::{
-    damage::{DamageBuffer, Health, Resist}, field::{Field, HexCoord, OccupyingCell}, turn::Player,
+    asset::GameState,
+    damage::{DamageAssets, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
+    field::{Field, HexCoord, OccupyingCell},
+    turn::{Cpu, Player, Team},
 };
 
 pub struct UnitPlugin;
 
 impl Plugin for UnitPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, reposition);
+        app.add_systems(OnEnter(GameState::InGame), spawn_unit_details_window)
+            .add_systems(Update, (reposition::<Player>, reposition::<Cpu>))
+            .add_observer(show_unit_details);
     }
 }
 
@@ -34,9 +39,9 @@ pub struct SelectedUnit;
 #[derive(Resource)]
 pub struct ActiveUnits(pub Vec<Entity>);
 
-pub fn reposition(
-    field: Res<Field<Player>>,
-    q_moved_units: Query<(&mut Transform, &OccupyingCell), Changed<OccupyingCell>>,
+pub fn reposition<T: Team + Component>(
+    field: Res<Field<T>>,
+    q_moved_units: Query<(&mut Transform, &OccupyingCell), (Changed<OccupyingCell>, With<T>)>,
     q_hexcoord: Query<&HexCoord>,
 ) {
     for (mut tf, OccupyingCell(e_cell)) in q_moved_units {
