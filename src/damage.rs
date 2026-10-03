@@ -95,11 +95,20 @@ impl Default for Health {
     }
 }
 
+#[derive(Component, Debug)]
+pub struct HealthCap(pub f32);
+
+impl Default for HealthCap {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
 /// Assigns resistances against `DamageVariant`s.
 ///
 /// Scales linearly from no resist at `0.0` to full resist at `1.0`. All values default to `0.0`.
 #[derive(Component, Debug, Default)]
-pub struct Resist(HashMap<DamageVariant, f32>);
+pub struct Resist(pub HashMap<DamageVariant, f32>);
 
 /// Applies damage to adjacent `Health` components.
 ///

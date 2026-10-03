@@ -269,6 +269,10 @@ fn deanimate_deselected_cell(trigger: On<Remove, SelectedCell>, mut commands: Co
         .insert(MeshMaterial3d::<StandardMaterial>::default());
 }
 
+fn cell_details_on_hover() {
+    todo!();
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;

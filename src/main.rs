@@ -10,15 +10,7 @@ use bevy_asset_loader::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::ActionPlugin,
-    asset::{GameState, NineAssetPlugin},
-    damage::DamagePlugin,
-    enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
-    field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
-    nine::Nine,
-    turn::{Cpu, Player, TurnPlugin},
-    ui::NineUiPlugin,
-    unit::{Unit, UnitPlugin},
+    actions::ActionPlugin, asset::{GameState, NineAssetPlugin}, damage::{DamagePlugin, Health}, enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal}, field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field}, nine::Nine, turn::{Cpu, Player, TurnPlugin}, ui::NineUiPlugin, unit::{Unit, UnitPlugin},
 };
 
 pub mod actions;
@@ -160,5 +152,6 @@ fn entry(
         WorldAssetRoot(enemy_assets.mortal.clone()),
         Mortal,
         OccupyingCell(*e_cell),
+        Health(0.7),
     ));
 }
