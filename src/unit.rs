@@ -27,13 +27,12 @@ pub struct UnitDesc {
     pub passive: &'static str,
 }
 
-#[derive(Resource)]
-pub struct ActiveUnits(pub Vec<UnitType>);
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct SelectedUnit;
 
-pub enum UnitType {
-	Maw,
-	Symmetra,
-}
+#[derive(Resource)]
+pub struct ActiveUnits(pub Vec<Entity>);
 
 pub fn reposition(
     field: Res<Field<Player>>,

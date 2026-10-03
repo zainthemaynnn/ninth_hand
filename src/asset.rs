@@ -56,7 +56,6 @@ fn lerp_val(start: &Val, end: &Val, ratio: f32) -> Val {
 
 impl Lens<Node> for UiRightLens {
     fn lerp(&mut self, mut target: Mut<Node>, ratio: f32) {
-        info!("set! {:?}", lerp_val(&self.start, &self.end, ratio));
         target.right = lerp_val(&self.start, &self.end, ratio);
     }
 }

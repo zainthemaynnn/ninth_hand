@@ -13,7 +13,6 @@ pub mod actions;
 pub mod asset;
 pub mod damage;
 pub mod field;
-pub mod intents;
 pub mod nine;
 pub mod symmetra;
 pub mod turn;
