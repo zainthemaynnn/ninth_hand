@@ -1,17 +1,29 @@
 #![feature(more_float_constants)]
 use std::f32::consts::PI;
 
-use bevy::{color::palettes::css::SILVER, prelude::*};
+use bevy::{
+    color::palettes::css::SILVER,
+    gltf::{GltfPlugin, convert_coordinates::GltfConvertCoordinates},
+    prelude::*,
+};
 use bevy_asset_loader::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::ActionPlugin, asset::{GameState, NineAssetPlugin}, field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field}, turn::{Cpu, Player, TurnPlugin}, ui::NineUiPlugin, unit::{Unit, UnitPlugin},
+    actions::ActionPlugin,
+    asset::{GameState, NineAssetPlugin},
+    damage::DamagePlugin,
+    enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
+    field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
+    turn::{Cpu, Player, TurnPlugin},
+    ui::NineUiPlugin,
+    unit::{Unit, UnitPlugin},
 };
 
 pub mod actions;
 pub mod asset;
 pub mod damage;
+pub mod enemy;
 pub mod field;
 pub mod nine;
 pub mod symmetra;
@@ -39,6 +51,8 @@ fn main() {
             MeshPickingPlugin,
             TurnPlugin,
             NineUiPlugin,
+            DamagePlugin,
+            EnemyPlugin,
         ))
         .configure_loading_state(
             LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
