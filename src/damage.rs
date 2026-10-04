@@ -35,21 +35,19 @@ impl DamageAssets {
 #[derive(Component, Hash, Eq, PartialEq, Copy, Clone, Debug, Default)]
 pub enum DamageVariant {
     #[default]
-    Physical,
-    Magical,
-
+    Bash,
+    Slash,
     Heat,
     Cold,
     Plague,
-
     Radiant,
     Abyssal,
 }
 
 impl DamageVariant {
     pub const VALUES: [Self; 7] = [
-        Self::Physical,
-        Self::Magical,
+        Self::Bash,
+        Self::Slash,
         Self::Heat,
         Self::Cold,
         Self::Plague,
@@ -59,8 +57,8 @@ impl DamageVariant {
 
     pub fn symbol(&self) -> &'static str {
         match self {
-            Self::Physical => "PHY",
-            Self::Magical => "MAG",
+            Self::Bash => "BSH",
+            Self::Slash => "CUT",
             Self::Heat => "HOT",
             Self::Cold => "CLD",
             Self::Plague => "PLG",
@@ -71,10 +69,10 @@ impl DamageVariant {
 
     pub fn color(&self) -> Color {
         match self {
-            Self::Physical => palettes::css::ORANGE.into(),
-            Self::Magical => palettes::css::AQUA.into(),
+            Self::Bash => palettes::css::DARK_ORANGE.into(),
+            Self::Slash => palettes::css::ORANGE.into(),
             Self::Heat => palettes::css::RED.into(),
-            Self::Cold => palettes::css::BLUE.into(),
+            Self::Cold => palettes::css::AQUA.into(),
             Self::Plague => palettes::css::GREEN.into(),
             Self::Radiant => palettes::css::WHITE.into(),
             Self::Abyssal => palettes::css::BLACK.into(),
