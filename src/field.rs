@@ -243,7 +243,6 @@ fn deselect_preselected_cell(
     mut commands: Commands,
     selected_query: Query<Entity, With<SelectedCell>>,
 ) {
-    debug!("deselect");
     for e_old in selected_query {
         if e_old == trigger.entity {
             continue;

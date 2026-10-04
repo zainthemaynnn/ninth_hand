@@ -47,6 +47,16 @@ pub enum DamageVariant {
 }
 
 impl DamageVariant {
+    pub const VALUES: [Self; 7] = [
+        Self::Physical,
+        Self::Magical,
+        Self::Heat,
+        Self::Cold,
+        Self::Plague,
+        Self::Radiant,
+        Self::Abyssal,
+    ];
+
     pub fn symbol(&self) -> &'static str {
         match self {
             Self::Physical => "PHY",

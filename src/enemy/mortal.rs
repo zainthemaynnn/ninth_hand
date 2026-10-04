@@ -3,12 +3,13 @@ use bevy::prelude::*;
 use crate::{turn::Cpu, unit::{Unit, UnitDesc}};
 
 #[derive(Component)]
-#[require(Unit, Cpu)]
-pub struct Mortal;
-
-impl Mortal {
-    const DESC: UnitDesc = UnitDesc {
+#[require(
+    Unit,
+    Cpu,
+    UnitDesc {
         name: "Mortal",
-        passive: "Nothing.",
-    };
-}
+        passive: "A useless mortal.",
+        flavor: "Yeah, I'm just a guy.",
+    }
+)]
+pub struct Mortal;

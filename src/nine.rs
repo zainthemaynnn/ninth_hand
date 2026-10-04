@@ -1,19 +1,23 @@
 use bevy::prelude::*;
 
 use crate::{
-    actions::{Action, CardArt, tags::*}, field::Field, turn::{Ally, Cpu, Player, Rival, TurnState}, unit::{Unit, UnitDesc},
+    actions::{Action, CardArt, tags::*},
+    field::Field,
+    turn::{Ally, Cpu, Player, Rival, TurnState},
+    unit::{Unit, UnitDesc},
 };
 
 #[derive(Component)]
-#[require(Unit, Player)]
-pub struct Nine;
-
-impl Nine {
-    const DESC: UnitDesc = UnitDesc {
+#[require(
+    Unit,
+    Player,
+    UnitDesc {
         name: "Nine",
         passive: "Consume -- When killing an enemy, gets an additional action.",
-    };
-}
+        flavor: "MWAHAHAHAHA",
+    })
+]
+pub struct Nine;
 
 #[derive(Component, Debug)]
 #[relationship(relationship_target = HandOwnedBy)]

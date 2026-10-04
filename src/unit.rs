@@ -12,8 +12,10 @@ pub struct UnitPlugin;
 impl Plugin for UnitPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::InGame), spawn_unit_details_window)
-            .add_systems(Update, (reposition::<Player>, reposition::<Cpu>))
-            .add_observer(show_unit_details);
+            .add_systems(Update, (reposition::<Player>, reposition::<Cpu>));
+        // .add_observer(show_unit_health)
+        // .add_observer(show_unit_resist)
+        // .add_observer(show_unit_text);
     }
 }
 
@@ -27,9 +29,11 @@ impl Plugin for UnitPlugin {
 )]
 pub struct Unit;
 
+#[derive(Component)]
 pub struct UnitDesc {
     pub name: &'static str,
     pub passive: &'static str,
+    pub flavor: &'static str,
 }
 
 #[derive(Component)]
@@ -55,12 +59,7 @@ pub fn reposition<T: Team + Component>(
 pub struct UnitDetailsWindow;
 
 #[derive(Component, Debug, Clone, FromTemplate)]
-#[relationship(relationship_target = HealthBarOwner)]
-pub struct HealthBar(pub Entity);
-
-#[derive(Component, Debug, Clone, FromTemplate)]
-#[relationship_target(relationship = HealthBar)]
-pub struct HealthBarOwner(Entity);
+pub struct HealthBar;
 
 #[derive(Component, Debug, Clone, FromTemplate)]
 #[relationship(relationship_target = UnitResistDetailsOwner)]
@@ -70,72 +69,97 @@ pub struct UnitResistDetailsValue(pub Entity);
 #[relationship_target(relationship = UnitResistDetailsValue)]
 pub struct UnitResistDetailsOwner(Vec<Entity>);
 
+#[derive(Component, Debug, Clone, FromTemplate)]
+pub struct UnitName;
+
+#[derive(Component, Debug, Clone, FromTemplate)]
+pub struct UnitDescription;
+
+#[derive(Component, Debug, Clone, FromTemplate)]
+pub struct UnitFlavor;
+
 pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<DamageAssets>) {
     #[rustfmt::skip]
-    let resist_value_layout = vec![
-        (DamageVariant::Physical, 1, 1),
-        (DamageVariant::Magical,  1, 2),
-        (DamageVariant::Heat,     2, 1),
-        (DamageVariant::Cold,     2, 2),
-        (DamageVariant::Plague,   2, 3),
-        (DamageVariant::Radiant,  3, 1),
-        (DamageVariant::Abyssal,  3, 2),
+    let resist_value_l = &DamageVariant::VALUES[0..2];
+    let resist_value_m = &DamageVariant::VALUES[2..5];
+    let resist_value_r = &DamageVariant::VALUES[5..7];
+    let resist_values: Vec<Box<&[DamageVariant]>> = vec![
+        Box::new(resist_value_r),
+        Box::new(resist_value_m),
+        Box::new(resist_value_l),
     ];
 
-    bsn! {
+    commands.spawn_scene(bsn! {
         #MainWindow
         UnitDetailsWindow
-        UnitResistDetailsOwner::default()
-        HealthBarOwner(#HealthBar)
         Node {
+            position_type: PositionType::Absolute,
             top: Val::ZERO,
             right: Val::ZERO,
             margin: UiRect::all(Val::Px(8.0)),
             padding: UiRect::all(Val::Px(8.0)),
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::Center,
+            height: Val::Px(160.0),
+            column_gap: Val::Px(8.0),
         }
+        BackgroundColor({ palettes::basic::BLACK.with_alpha(0.5) })
 
         Children [
             (
                 #Photo
                 Node {
-                    height: Val::Px(40.0),
+                    height: Val::Auto,
                     aspect_ratio: { Some(1.0) },
+                    align_self: AlignSelf::Stretch,
                 }
                 ImageNode::default()
             ),
 
             (
                 #ResistValues
+                UnitResistDetailsOwner::default()
                 Node {
-                    display: Display::Grid,
-                    grid_template_columns: { RepeatedGridTrack::flex::<Vec<_>>(3, 1.0) },
-                    grid_template_rows: { RepeatedGridTrack::flex::<Vec<_>>(3, 1.0) },
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::RowReverse,
+                    align_items: AlignItems::Center,
                 }
                 Children [
-                    // Instead of a manual loop mutation, evaluate a clean procedural bsn list mapping
                     {
-                        resist_value_layout.iter().map(|(damage_ty, col, row)| {
+                        resist_values.iter().map(|resist_values_col| {
                             bsn! {
                                 Node {
-                                    grid_column: GridPlacement::start(*col),
-                                    grid_row: GridPlacement::span(*row),
+                                    display: Display::Flex,
+                                    flex_direction: FlexDirection::Column,
                                 }
                                 Children [
-                                    (
-                                        Node {
-                                            height: Val::Px(24.0),
-                                            aspect_ratio: { Some(1.0) },
-                                        }
-                                        ImageNode {
-                                            image: { damage_assets.icon_from_damage_variant(*damage_ty).unwrap().clone() },
-                                        }
-                                    ),
-                                    (
-                                        UnitResistDetailsValue(#MainWindow)
-                                        Text::new("1.00 x")
-                                    )
+                                    {
+                                        resist_values_col.iter().map(|damage_ty| {
+                                            bsn! {
+                                                Node {
+                                                    display: Display::Flex,
+                                                    flex_direction: FlexDirection::Row,
+                                                    padding: UiRect::all(Val::Px(4.0)),
+                                                }
+                                                Children [
+                                                    (
+                                                        Node {
+                                                            height: Val::Px(20.0),
+                                                            aspect_ratio: { Some(1.0) },
+                                                        }
+                                                        ImageNode {
+                                                            image: { damage_assets.icon_from_damage_variant(*damage_ty).unwrap().clone() },
+                                                            color: { damage_ty.color() },
+                                                        }
+                                                    ),
+                                                    (
+                                                        UnitResistDetailsValue(#ResistValues)
+                                                        Text::new("1.0x")
+                                                    )
+                                                ]
+                                            }
+                                        }).collect::<Vec<_>>()
+                                    }
                                 ]
                             }
                         }).collect::<Vec<_>>()
@@ -144,8 +168,36 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
             ),
 
             (
+                #Text
+                Node {
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Column,
+                }
+                Children [
+                    (
+                        #Name
+                        UnitName
+                        Text::new("Mortal")
+                        TextFont { font_size: { FontSize::Px(24.0) } }
+                    ),
+                    (
+                        #UnitDescription
+                        UnitDescription
+                        Text::new("A useless mortal.")
+                    ),
+                    (
+                        #UnitFlavor
+                        UnitFlavor
+                        Text::new("\"I'm just a guy.\"")
+                        TextColor({ palettes::css::GRAY })
+                        TextFont { font_size: { FontSize::Px(16.0) } }
+                    )
+                ]
+            ),
+
+            (
                 #HealthBar
-                HealthBar(#MainWindow)
+                HealthBar
                 Node {
                     position_type: PositionType::Absolute,
                     top: Val::Percent(100.0),
@@ -154,28 +206,51 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
                     height: Val::Px(10.0),
                 }
                 BackgroundColor(Color::from(palettes::basic::RED))
-            )
+            ),
         ]
-    };
+    });
 }
 
-pub fn show_unit_details(
+pub fn show_unit_health(
     trigger: On<Add, SelectedUnit>,
-    unit_query: Query<(&Health, &Resist, &HealthCap)>,
-    unit_details_query: Query<(&HealthBarOwner, &UnitResistDetailsOwner), With<UnitDetailsWindow>>,
+    unit_query: Query<(&Health, &HealthCap)>,
     mut health_bar_query: Query<&mut Node, With<HealthBar>>,
     mut resist_query: Query<&mut Text, With<UnitResistDetailsValue>>,
 ) {
-    let (health, resist, health_cap) = unit_query.get(trigger.entity).unwrap();
-    let (HealthBarOwner(e_healthbar), UnitResistDetailsOwner(e_resists)) =
-        unit_details_query.single().unwrap();
+    let (health, health_cap) = unit_query.get(trigger.entity).unwrap();
 
-    let mut health_bar_node = health_bar_query.get_mut(*e_healthbar).unwrap();
+    let mut health_bar_node = health_bar_query.single_mut().unwrap();
     health_bar_node.width = Val::Percent(health.0 / health_cap.0 * 100.0);
+}
 
-    for (damage_ty, value) in resist.0.iter() {
-        let e_resist = e_resists[*damage_ty as usize];
+pub fn show_unit_resist(
+    trigger: On<Add, SelectedUnit>,
+    unit_query: Query<&Resist>,
+    all_resist_query: Query<&UnitResistDetailsOwner>,
+    mut resist_query: Query<&mut Text, With<UnitResistDetailsValue>>,
+) {
+    let resist = unit_query.get(trigger.entity).unwrap();
+    let UnitResistDetailsOwner(e_resists) = all_resist_query.single().unwrap();
+
+    for damage_ty in DamageVariant::VALUES {
+        let resist_value = resist.0.get(&damage_ty).unwrap_or(&1.0f32);
+        let e_resist = e_resists[damage_ty as usize];
         let mut resist_text = resist_query.get_mut(e_resist).unwrap();
-        resist_text.0 = format!("{0:.2} x", value);
+        resist_text.0 = format!("{0:.1}x", resist_value);
     }
+}
+
+pub fn show_unit_text(
+    trigger: On<Add, SelectedUnit>,
+    unit_query: Query<&UnitDesc>,
+    mut text_query: ParamSet<(
+        Query<&mut Text, With<UnitName>>,
+        Query<&mut Text, With<UnitDescription>>,
+        Query<&mut Text, With<UnitFlavor>>,
+    )>,
+) {
+    let desc = unit_query.get(trigger.entity).unwrap();
+    text_query.p0().single_mut().unwrap().0 = desc.name.to_owned();
+    text_query.p1().single_mut().unwrap().0 = desc.passive.to_owned();
+    text_query.p2().single_mut().unwrap().0 = format!("\"{0}\"", desc.flavor.to_owned());
 }
