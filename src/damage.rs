@@ -97,6 +97,7 @@ pub struct Damage {
 ///
 /// Can't fall below zero.
 #[derive(Component, Debug)]
+#[require(HealthCap)]
 pub struct Health(pub f32);
 
 impl Default for Health {

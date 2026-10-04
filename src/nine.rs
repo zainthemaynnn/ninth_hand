@@ -1,7 +1,8 @@
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::{
     actions::{Action, CardArt, tags::*},
+    damage::{DamageVariant, Health, HealthCap, Resist},
     field::Field,
     turn::{Ally, Cpu, Player, Rival, TurnState},
     unit::{Unit, UnitDesc},
@@ -13,10 +14,16 @@ use crate::{
     Player,
     UnitDesc {
         name: "Nine",
-        passive: "Consume -- When killing an enemy, gets an additional action.",
+        passive: "When killing an enemy, gets an additional action.",
         flavor: "MWAHAHAHAHA",
-    })
-]
+    },
+    Health(10.0),
+    HealthCap(10.0),
+    Resist(HashMap::from([
+        (DamageVariant::Abyssal, 0.5),
+        (DamageVariant::Radiant, 2.0),
+    ])),
+)]
 pub struct Nine;
 
 #[derive(Component, Debug)]

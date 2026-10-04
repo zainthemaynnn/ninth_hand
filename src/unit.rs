@@ -1,9 +1,9 @@
-use bevy::{color::palettes, prelude::*};
+use bevy::{color::palettes, math::VectorSpace, prelude::*};
 
 use crate::{
     asset::GameState,
     damage::{DamageAssets, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
-    field::{Field, HexCoord, OccupyingCell},
+    field::{Field, HexCoord, OccupiedByUnit, OccupyingCell, SelectedCell},
     turn::{Cpu, Player, Team},
 };
 
@@ -12,10 +12,12 @@ pub struct UnitPlugin;
 impl Plugin for UnitPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::InGame), spawn_unit_details_window)
-            .add_systems(Update, (reposition::<Player>, reposition::<Cpu>));
-        // .add_observer(show_unit_health)
-        // .add_observer(show_unit_resist)
-        // .add_observer(show_unit_text);
+            .add_systems(Update, (reposition::<Player>, reposition::<Cpu>))
+            .add_observer(show_unit_health)
+            .add_observer(show_unit_resist)
+            .add_observer(show_unit_text)
+            .add_observer(select_unit)
+            .add_observer(deselect_preselected_unit);
     }
 }
 
@@ -61,13 +63,8 @@ pub struct UnitDetailsWindow;
 #[derive(Component, Debug, Clone, FromTemplate)]
 pub struct HealthBar;
 
-#[derive(Component, Debug, Clone, FromTemplate)]
-#[relationship(relationship_target = UnitResistDetailsOwner)]
-pub struct UnitResistDetailsValue(pub Entity);
-
 #[derive(Component, Debug, Clone, Default)]
-#[relationship_target(relationship = UnitResistDetailsValue)]
-pub struct UnitResistDetailsOwner(Vec<Entity>);
+pub struct UnitResistDetailsVariant(pub DamageVariant);
 
 #[derive(Component, Debug, Clone, FromTemplate)]
 pub struct UnitName;
@@ -89,6 +86,7 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
         Box::new(resist_value_l),
     ];
 
+    error!("spawned!");
     commands.spawn_scene(bsn! {
         #MainWindow
         UnitDetailsWindow
@@ -118,7 +116,6 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
 
             (
                 #ResistValues
-                UnitResistDetailsOwner::default()
                 Node {
                     display: Display::Flex,
                     flex_direction: FlexDirection::RowReverse,
@@ -144,7 +141,7 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
                                                 Children [
                                                     (
                                                         Node {
-                                                            height: Val::Px(20.0),
+                                                            height: Val::Px(28.0),
                                                             aspect_ratio: { Some(1.0) },
                                                         }
                                                         ImageNode {
@@ -153,8 +150,9 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
                                                         }
                                                     ),
                                                     (
-                                                        UnitResistDetailsValue(#ResistValues)
+                                                        UnitResistDetailsVariant({*damage_ty})
                                                         Text::new("1.0x")
+                                                        TextColor
                                                     )
                                                 ]
                                             }
@@ -172,6 +170,7 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
                 Node {
                     display: Display::Flex,
                     flex_direction: FlexDirection::Column,
+                    width: Val::Px(400.0),
                 }
                 Children [
                     (
@@ -215,7 +214,6 @@ pub fn show_unit_health(
     trigger: On<Add, SelectedUnit>,
     unit_query: Query<(&Health, &HealthCap)>,
     mut health_bar_query: Query<&mut Node, With<HealthBar>>,
-    mut resist_query: Query<&mut Text, With<UnitResistDetailsValue>>,
 ) {
     let (health, health_cap) = unit_query.get(trigger.entity).unwrap();
 
@@ -225,18 +223,24 @@ pub fn show_unit_health(
 
 pub fn show_unit_resist(
     trigger: On<Add, SelectedUnit>,
+    mut commands: Commands,
     unit_query: Query<&Resist>,
-    all_resist_query: Query<&UnitResistDetailsOwner>,
-    mut resist_query: Query<&mut Text, With<UnitResistDetailsValue>>,
+    mut resist_query: Query<(&mut Text, &mut TextColor, &UnitResistDetailsVariant)>,
 ) {
     let resist = unit_query.get(trigger.entity).unwrap();
-    let UnitResistDetailsOwner(e_resists) = all_resist_query.single().unwrap();
 
-    for damage_ty in DamageVariant::VALUES {
-        let resist_value = resist.0.get(&damage_ty).unwrap_or(&1.0f32);
-        let e_resist = e_resists[damage_ty as usize];
-        let mut resist_text = resist_query.get_mut(e_resist).unwrap();
-        resist_text.0 = format!("{0:.1}x", resist_value);
+    for (mut text, mut color, damage_ty) in resist_query {
+        let resist_value = resist.0.get(&damage_ty.0).unwrap_or(&1.0f32);
+        text.0 = format!("{0:.1}x", resist_value);
+        if *resist_value < 1.0 {
+            color.0 = palettes::css::GRAY
+                .lerp(palettes::css::WHITE, *resist_value)
+                .into();
+        } else {
+            color.0 = palettes::css::WHITE
+                .lerp(palettes::css::RED, f32::min(resist_value - 1.0, 1.0))
+                .into();
+        }
     }
 }
 
@@ -253,4 +257,38 @@ pub fn show_unit_text(
     text_query.p0().single_mut().unwrap().0 = desc.name.to_owned();
     text_query.p1().single_mut().unwrap().0 = desc.passive.to_owned();
     text_query.p2().single_mut().unwrap().0 = format!("\"{0}\"", desc.flavor.to_owned());
+}
+
+pub fn select_unit(
+    trigger: On<Add, SelectedCell>,
+    mut commands: Commands,
+    cell_query: Query<Option<&OccupiedByUnit>>,
+    selected_query: Query<Entity, With<SelectedUnit>>,
+) {
+    info!("select");
+    if let Some(e_unit) = cell_query.get(trigger.entity).unwrap() {
+        info!("found");
+        // lol?? how do you actually get the entity in here?
+        commands
+            .entity(e_unit.iter().next().unwrap())
+            .insert(SelectedUnit);
+    } else {
+        if let Ok(e_unit) = selected_query.single() {
+            commands.entity(e_unit).remove::<SelectedUnit>();
+        }
+    }
+}
+
+fn deselect_preselected_unit(
+    trigger: On<Add, SelectedUnit>,
+    mut commands: Commands,
+    selected_query: Query<Entity, With<SelectedUnit>>,
+) {
+    for e_old in selected_query {
+        if e_old == trigger.entity {
+            continue;
+        }
+
+        commands.entity(e_old).remove::<SelectedUnit>();
+    }
 }
