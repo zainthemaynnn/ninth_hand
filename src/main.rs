@@ -10,7 +10,15 @@ use bevy_asset_loader::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::ActionPlugin, asset::{GameState, NineAssetPlugin}, damage::{DamagePlugin, Health}, enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal}, field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field}, nine::Nine, turn::{Cpu, Player, TurnPlugin}, ui::NineUiPlugin, unit::{Unit, UnitPlugin},
+    actions::{ActionPlugin, AvailableAction, OwnedByUnit},
+    asset::{GameState, NineAssetPlugin},
+    damage::{DamagePlugin, Health},
+    enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
+    field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
+    nine::Nine,
+    turn::{Cpu, Player, TurnPlugin},
+    ui::NineUiPlugin,
+    unit::{Unit, UnitPlugin},
 };
 
 pub mod actions;
@@ -143,15 +151,20 @@ fn entry(
     let gltf = gltfs.get(&nine_assets.nine).unwrap();
     let h_scene = gltf.default_scene.as_ref().unwrap().clone();
     let e_cell = player_field.cells.get(&HexCoord::new(0, 0)).unwrap();
-    commands.spawn((WorldAssetRoot(h_scene), Nine, OccupyingCell(*e_cell)));
+    let e_nine = commands
+        .spawn((WorldAssetRoot(h_scene), Nine, OccupyingCell(*e_cell)))
+        .id();
 
-    let e_cell = cpu_field.cells.get(&HexCoord::new(0, 0)).unwrap();
-    dbg!(tf_query.get(*e_cell));
-    dbg!(cpu_field.origin_transform);
-    commands.spawn((
-        WorldAssetRoot(enemy_assets.mortal.clone()),
-        Mortal,
-        OccupyingCell(*e_cell),
-        Health(0.7),
-    ));
+    let e_cell = cpu_field.cells.get(&HexCoord::new(0, -3)).unwrap();
+    let e_mortal = commands
+        .spawn((
+            WorldAssetRoot(enemy_assets.mortal.clone()),
+            Mortal,
+            OccupyingCell(*e_cell),
+            Health(0.7),
+        ))
+        .id();
+
+    commands.spawn((crate::nine::Crush, AvailableAction, OwnedByUnit(e_nine)));
+    commands.spawn((crate::nine::Slap, AvailableAction, OwnedByUnit(e_nine)));
 }

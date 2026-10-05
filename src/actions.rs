@@ -8,7 +8,11 @@ use bevy_tweening::{
 };
 use rand::seq::SliceRandom;
 
-use crate::asset::GameState;
+use crate::{
+    actions::tags::FrontTarget,
+    asset::GameState,
+    field::{HexCoord, HighlightedCell, HighlightedCellType, OccupyingCell},
+};
 
 const CARD_STICKOUT: Val = Val::Percent(50.0);
 
@@ -19,14 +23,15 @@ impl Plugin for ActionPlugin {
         app.add_systems(OnEnter(GameState::InGame), set_action_bar)
             .add_systems(
                 Update,
-                (update_action_bar, select_deselect_card)
-                    .run_if(in_state(GameState::InGame)),
+                (update_action_bar, select_deselect_card).run_if(in_state(GameState::InGame)),
             )
             .add_observer(select_card_animation)
             .add_observer(deselect_card_animation)
+            .add_observer(select_action_on_card_select)
+            .add_observer(deselect_action_on_card_deselect)
+            .add_observer(highlight_action_owner_cell)
             .configure_loading_state(
-                LoadingStateConfig::new(GameState::AssetLoading)
-                    .load_collection::<CardAssets>(),
+                LoadingStateConfig::new(GameState::AssetLoading).load_collection::<CardAssets>(),
             );
     }
 }
@@ -118,6 +123,10 @@ pub struct ActionCard;
 pub struct SelectedCard;
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct SelectedAction;
+
+#[derive(Component)]
 pub struct CardArt(pub &'static str);
 
 #[derive(AssetCollection, Resource)]
@@ -126,8 +135,31 @@ pub struct CardAssets {
     pub backgrounds: HashMap<AssetFileStem, Handle<Image>>,
 }
 
+/// The `Action` owning this card.
+#[derive(Component, Debug)]
+#[relationship(relationship_target = OwnsCard)]
+pub struct OwnedByAction(pub Entity);
+
+/// The `Card` owned by this action.
+#[derive(Component, Debug)]
+#[relationship_target(relationship = OwnedByAction)]
+pub struct OwnsCard(Entity);
+
+/// The `Unit` owning this action.
+#[derive(Component, Debug)]
+#[relationship(relationship_target = OwnsAction)]
+pub struct OwnedByUnit(pub Entity);
+
+/// The `Action`s owned by this unit.
+#[derive(Component, Debug)]
+#[relationship_target(relationship = OwnedByUnit)]
+pub struct OwnsAction(Vec<Entity>);
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+pub struct Targettable;
+
 pub fn set_action_bar(mut commands: Commands) {
-    info!("set action bar");
     commands.spawn((
         ActionBar,
         Node {
@@ -143,20 +175,17 @@ pub fn set_action_bar(mut commands: Commands) {
         },
         BackgroundColor(Color::BLACK.with_alpha(0.2)),
     ));
-
-    commands.spawn((crate::nine::Crush, AvailableAction));
-    commands.spawn((crate::nine::Slap, AvailableAction));
 }
 
 pub fn update_action_bar(
     mut commands: Commands,
     card_assets: Res<CardAssets>,
     q_bar: Query<Entity, With<ActionBar>>,
-    q_actions: Query<(&Action, &CardArt), Added<AvailableAction>>,
+    q_actions: Query<(Entity, &Action, &CardArt), Added<AvailableAction>>,
 ) {
     let e_bar = q_bar.single().unwrap();
 
-    for (action, card_art) in q_actions {
+    for (e_action, action, card_art) in q_actions {
         commands.entity(e_bar).with_children(|parent| {
             let mut selection_tween = TweenAnim::new(Tween::new(
                 EaseFunction::QuadraticOut,
@@ -172,6 +201,7 @@ pub fn update_action_bar(
             parent
                 .spawn((
                     ActionCard,
+                    OwnedByAction(e_action),
                     Node {
                         position_type: PositionType::Relative,
                         width: Val::Auto,
@@ -281,4 +311,51 @@ fn deselect_card_animation(
         .set_tweenable(selection_tween.with_playback_direction(PlaybackDirection::Backward))
         .unwrap();
     tween_anim.playback_state = PlaybackState::Playing;
+}
+
+fn select_action_on_card_select(
+    trigger: On<Add, SelectedCard>,
+    mut commands: Commands,
+    card_query: Query<&OwnedByAction>,
+) {
+    let OwnedByAction(e_action) = card_query.get(trigger.entity).unwrap();
+    commands.entity(*e_action).insert(SelectedAction);
+}
+
+fn deselect_action_on_card_deselect(
+    trigger: On<Remove, SelectedCard>,
+    mut commands: Commands,
+    card_query: Query<&OwnedByAction>,
+) {
+    let OwnedByAction(e_action) = card_query.get(trigger.entity).unwrap();
+    commands.entity(*e_action).remove::<SelectedAction>();
+}
+
+fn highlight_action_owner_cell(
+    trigger: On<Add, SelectedAction>,
+    mut commands: Commands,
+    action_query: Query<&OwnedByUnit>,
+    unit_query: Query<&OccupyingCell>,
+) {
+    let Ok(OwnedByUnit(e_unit)) = action_query.get(trigger.entity) else {
+        warn!("action has no owner");
+        return;
+    };
+
+    let Ok(OccupyingCell(e_cell)) = unit_query.get(*e_unit) else {
+        warn!("action owner not occupying cell");
+        return;
+    };
+
+    commands.entity(*e_cell).insert(HighlightedCell {
+        ty: HighlightedCellType::Blue,
+    });
+    info!("highlighted selected action owner");
+}
+
+fn highlight_front_target_cells(
+    trigger: On<Add, SelectedAction>,
+    target_query: Query<(), With<FrontTarget>>,
+) {
+    todo!();
 }

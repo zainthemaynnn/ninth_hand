@@ -45,16 +45,14 @@ pub struct HandOwnedBy(Entity);
 )]
 pub struct Crush;
 
-impl Crush {
-    fn play(
-        ally_field: Res<Field<Player>>,
-        rival_field: Res<Field<Cpu>>,
-        mut turn_state: ResMut<NextState<TurnState>>,
-        unit_query: Query<(&OwnsHand), With<Nine>>,
-        mut hand_query: Query<(&mut Transform,)>,
-    ) {
-        todo!();
-    }
+pub fn play_crush(
+    ally_field: Res<Field<Player>>,
+    rival_field: Res<Field<Cpu>>,
+    mut turn_state: ResMut<NextState<TurnState>>,
+    unit_query: Query<(&OwnsHand), With<Nine>>,
+    mut hand_query: Query<(&mut Transform,)>,
+) {
+    todo!();
 }
 
 #[derive(Component)]

@@ -1,27 +1,34 @@
 use bevy::{mesh::ExtrusionBuilder, prelude::*};
 use bevy_tweening::{AnimTarget, RepeatCount, RepeatStrategy, Tween, TweenAnim};
 use std::{
-    collections::HashMap, f32::consts::{FRAC_PI_2, FRAC_PI_6, PI, SQRT_3}, marker::PhantomData, time::Duration,
+    collections::HashMap,
+    f32::consts::{FRAC_PI_2, FRAC_PI_6, PI, SQRT_3},
+    marker::PhantomData,
+    time::Duration,
 };
 
-use crate::{asset::{GameState, MaterialEmissiveLens}, turn::{Cpu, Player, Team}};
+use crate::{
+    asset::{GameState, MaterialEmissiveLens},
+    turn::{Cpu, Player, Team},
+};
 
 pub struct FieldPlugin;
 
 impl Plugin for FieldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<HexMesh>()
-            .init_resource::<SelectedCellMaterial>()
+            .init_resource::<HighlightedCellMaterials>()
             .init_resource::<Field<Player>>()
             .init_resource::<Field<Cpu>>()
             .add_systems(
                 OnEnter(GameState::AssetLoading),
-                animate_selected_cell_material,
+                animate_highlighted_cell_material,
             )
             .add_observer(select_cell_on_click)
             .add_observer(deselect_preselected_cell)
-            .add_observer(animate_selected_cell)
-            .add_observer(deanimate_deselected_cell);
+            .add_observer(animate_highlighted_cell)
+            .add_observer(deanimate_dehighlighted_cell)
+            .add_observer(dehighlight_deselected_cell);
     }
 }
 
@@ -106,16 +113,51 @@ impl FromWorld for HexMesh {
 
 #[derive(Component)]
 #[component(storage = "SparseSet")]
+#[require(
+    HighlightedCell { ty: HighlightedCellType::Red },
+)]
 pub struct SelectedCell;
 
-#[derive(Resource)]
-pub struct SelectedCellMaterial(pub Handle<StandardMaterial>);
+#[derive(Component, Copy, Clone, Default, Hash, Eq, PartialEq)]
+pub enum HighlightedCellType {
+    #[default]
+    White,
+    Red,
+    Blue,
+    Green,
+}
 
-impl FromWorld for SelectedCellMaterial {
+impl HighlightedCellType {
+    const VALUES: [Self; 4] = [Self::White, Self::Red, Self::Blue, Self::Green];
+}
+
+impl From<HighlightedCellType> for LinearRgba {
+    fn from(value: HighlightedCellType) -> Self {
+        match value {
+            HighlightedCellType::White => LinearRgba::WHITE,
+            HighlightedCellType::Red => LinearRgba::RED,
+            HighlightedCellType::Blue => LinearRgba::BLUE,
+            HighlightedCellType::Green => LinearRgba::GREEN,
+        }
+    }
+}
+
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct HighlightedCell {
+    pub ty: HighlightedCellType,
+}
+
+#[derive(Resource)]
+pub struct HighlightedCellMaterials(pub HashMap<HighlightedCellType, Handle<StandardMaterial>>);
+
+impl FromWorld for HighlightedCellMaterials {
     fn from_world(world: &mut World) -> Self {
         let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
         let handle = materials.add(StandardMaterial::default());
-        SelectedCellMaterial(handle)
+        HighlightedCellMaterials(HashMap::from(
+            HighlightedCellType::VALUES.map(|v| (v, materials.add(StandardMaterial::default()))),
+        ))
     }
 }
 
@@ -205,22 +247,26 @@ pub fn load_field<T: Team>(
     info!("loaded hex cells {:?}", &coords);
 }
 
-fn animate_selected_cell_material(mut commands: Commands, material: Res<SelectedCellMaterial>) {
-    error!("tweening material");
-    let selection_tween = Tween::new(
-        EaseFunction::SineInOut,
-        Duration::from_millis(1000),
-        MaterialEmissiveLens {
-            start: LinearRgba::BLACK,
-            end: LinearRgba::RED,
-        },
-    )
-    .with_repeat(RepeatCount::Infinite, RepeatStrategy::MirroredRepeat);
+fn animate_highlighted_cell_material(
+    mut commands: Commands,
+    materials: Res<HighlightedCellMaterials>,
+) {
+    for (v, material) in materials.0.iter() {
+        let selection_tween = Tween::new(
+            EaseFunction::SineInOut,
+            Duration::from_millis(1000),
+            MaterialEmissiveLens {
+                start: LinearRgba::BLACK,
+                end: LinearRgba::from(*v),
+            },
+        )
+        .with_repeat(RepeatCount::Infinite, RepeatStrategy::MirroredRepeat);
 
-    commands.spawn((
-        TweenAnim::new(selection_tween),
-        AnimTarget::asset(material.0.id()),
-    ));
+        commands.spawn((
+            TweenAnim::new(selection_tween),
+            AnimTarget::asset(material.id()),
+        ));
+    }
 }
 
 fn select_cell_on_click(
@@ -228,7 +274,6 @@ fn select_cell_on_click(
     cell_query: Query<Option<&SelectedCell>, With<FieldCell>>,
     mut commands: Commands,
 ) {
-    debug!("select");
     if let Ok(selected) = cell_query.get(trigger.entity) {
         if selected.is_none() {
             commands.entity(trigger.entity).insert(SelectedCell);
@@ -252,20 +297,27 @@ fn deselect_preselected_cell(
     }
 }
 
-fn animate_selected_cell(
-    trigger: On<Add, SelectedCell>,
+fn animate_highlighted_cell(
+    trigger: On<Add, HighlightedCell>,
     mut commands: Commands,
-    material: Res<SelectedCellMaterial>,
+    materials: Res<HighlightedCellMaterials>,
+    highlight_query: Query<&HighlightedCell>,
 ) {
+    info!("highlighting cell");
+    let highlight = highlight_query.get(trigger.entity).unwrap();
     commands
         .entity(trigger.entity)
-        .insert(MeshMaterial3d::from(material.0.clone()));
+        .insert(MeshMaterial3d::from(materials.0.get(&highlight.ty).unwrap().clone()));
 }
 
-fn deanimate_deselected_cell(trigger: On<Remove, SelectedCell>, mut commands: Commands) {
+fn deanimate_dehighlighted_cell(trigger: On<Remove, HighlightedCell>, mut commands: Commands) {
     commands
         .entity(trigger.entity)
         .insert(MeshMaterial3d::<StandardMaterial>::default());
+}
+
+fn dehighlight_deselected_cell(trigger: On<Remove, SelectedCell>, mut commands: Commands) {
+    commands.entity(trigger.entity).remove::<HighlightedCell>();
 }
 
 fn cell_details_on_hover() {

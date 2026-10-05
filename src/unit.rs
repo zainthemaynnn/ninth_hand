@@ -104,15 +104,15 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
         BackgroundColor({ palettes::basic::BLACK.with_alpha(0.5) })
 
         Children [
-            (
-                #Photo
-                Node {
-                    height: Val::Auto,
-                    aspect_ratio: { Some(1.0) },
-                    align_self: AlignSelf::Stretch,
-                }
-                ImageNode::default()
-            ),
+            // (
+            //     #Photo
+            //     Node {
+            //         height: Val::Auto,
+            //         aspect_ratio: { Some(1.0) },
+            //         align_self: AlignSelf::Stretch,
+            //     }
+            //     ImageNode::default()
+            // ),
 
             (
                 #ResistValues
