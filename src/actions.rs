@@ -12,6 +12,8 @@ use crate::{
     actions::tags::FrontTarget,
     asset::GameState,
     field::{HexCoord, HighlightedCell, HighlightedCellType, OccupyingCell},
+    turn::Rival,
+    unit::Unit,
 };
 
 const CARD_STICKOUT: Val = Val::Percent(50.0);
@@ -30,6 +32,7 @@ impl Plugin for ActionPlugin {
             .add_observer(select_action_on_card_select)
             .add_observer(deselect_action_on_card_deselect)
             .add_observer(highlight_action_owner_cell)
+            .add_observer(highlight_front_target_cells)
             .configure_loading_state(
                 LoadingStateConfig::new(GameState::AssetLoading).load_collection::<CardAssets>(),
             );
@@ -157,7 +160,13 @@ pub struct OwnsAction(Vec<Entity>);
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
+#[require(HighlightedCell { ty: HighlightedCellType::Red })]
 pub struct Targettable;
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+#[require(HighlightedCell { ty: HighlightedCellType::Gray })]
+pub struct Untargettable;
 
 pub fn set_action_bar(mut commands: Commands) {
     commands.spawn((
@@ -355,7 +364,31 @@ fn highlight_action_owner_cell(
 
 fn highlight_front_target_cells(
     trigger: On<Add, SelectedAction>,
+    mut commands: Commands,
     target_query: Query<(), With<FrontTarget>>,
+    enemy_query: Query<&OccupyingCell, (With<Unit>, With<Rival>)>,
+    cell_query: Query<(Entity, &HexCoord)>,
 ) {
-    todo!();
+    if !target_query.contains(trigger.entity) {
+        return;
+    }
+
+    let enemy_positions = enemy_query
+        .iter()
+        .map(|OccupyingCell(e_cell)| cell_query.get(*e_cell).unwrap())
+        .collect::<Vec<_>>();
+
+    if let Some(max_row) = enemy_positions.iter().map(|&(_, coord)| coord.row()).max() {
+        let (targets, non_targets): (Vec<_>, Vec<_>) = enemy_positions
+            .into_iter()
+            .partition(|&(_, coord)| coord.row() == max_row);
+
+        for (e_cell, _) in targets {
+            commands.entity(e_cell).insert(Targettable);
+        }
+
+        // for (e_cell, _) in non_targets {
+        //     commands.entity(e_cell).insert(Untargettable);
+        // }
+    }
 }

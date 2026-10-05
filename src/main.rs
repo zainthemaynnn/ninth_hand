@@ -94,6 +94,10 @@ fn main() {
 
 fn field_coords() -> Vec<HexCoord> {
     vec![
+        HexCoord::new(-3, 1),
+        HexCoord::new(-3, 0),
+        HexCoord::new(-3, -1),
+        HexCoord::new(-3, -2),
         HexCoord::new(-2, 1),
         HexCoord::new(-2, 0),
         HexCoord::new(-2, -1),
@@ -101,6 +105,7 @@ fn field_coords() -> Vec<HexCoord> {
         HexCoord::new(-1, 0),
         HexCoord::new(-1, -1),
         HexCoord::new(-1, -2),
+        HexCoord::new(-1, -3),
         HexCoord::new(0, 0),
         HexCoord::new(0, -1),
         HexCoord::new(0, -2),
@@ -108,10 +113,15 @@ fn field_coords() -> Vec<HexCoord> {
         HexCoord::new(1, -1),
         HexCoord::new(1, -2),
         HexCoord::new(1, -3),
+        HexCoord::new(1, -4),
         HexCoord::new(2, -1),
         HexCoord::new(2, -2),
         HexCoord::new(2, -3),
         HexCoord::new(2, -4),
+        HexCoord::new(3, -2),
+        HexCoord::new(3, -3),
+        HexCoord::new(3, -4),
+        HexCoord::new(3, -5),
     ]
 }
 
@@ -155,7 +165,7 @@ fn entry(
         .spawn((WorldAssetRoot(h_scene), Nine, OccupyingCell(*e_cell)))
         .id();
 
-    let e_cell = cpu_field.cells.get(&HexCoord::new(0, -3)).unwrap();
+    let e_cell = cpu_field.cells.get(&HexCoord::new(1, -1)).unwrap();
     let e_mortal = commands
         .spawn((
             WorldAssetRoot(enemy_assets.mortal.clone()),
@@ -164,6 +174,18 @@ fn entry(
             Health(0.7),
         ))
         .id();
+    let e_cell2 = cpu_field.cells.get(&HexCoord::new(0, -3)).unwrap();
+    let e_mortal2 = commands
+        .spawn((
+            WorldAssetRoot(enemy_assets.mortal.clone()),
+            Mortal,
+            OccupyingCell(*e_cell2),
+            Health(0.7),
+        ))
+        .id();
+
+    dbg!(HexCoord::new(1, -1).row());
+    dbg!(HexCoord::new(0, -3).row());
 
     commands.spawn((crate::nine::Crush, AvailableAction, OwnedByUnit(e_nine)));
     commands.spawn((crate::nine::Slap, AvailableAction, OwnedByUnit(e_nine)));

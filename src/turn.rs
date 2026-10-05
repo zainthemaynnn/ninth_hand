@@ -73,11 +73,11 @@ pub fn set_ally_rival<A: Component, R: Component>(
     rival_query: Query<Entity, With<R>>,
 ) {
     for e_ally in ally_query {
-        commands.entity(e_ally).remove::<A>().insert(Rival);
+        commands.entity(e_ally).remove::<Rival>().insert(Ally);
     }
 
     for e_rival in rival_query {
-        commands.entity(e_rival).remove::<R>().insert(Ally);
+        commands.entity(e_rival).remove::<Ally>().insert(Rival);
     }
 }
 

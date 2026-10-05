@@ -58,6 +58,22 @@ impl HexCoord {
             r: self.r + direction.r,
         }
     }
+
+    pub fn p(&self) -> i32 {
+        -self.q - self.r
+    }
+
+    pub fn row(&self) -> i32 {
+        self.r.abs() - (self.q + 1) / 2
+    }
+
+    pub fn frac_row(&self) -> f32 {
+        self.r.abs() as f32 - self.q as f32 / 2.0
+    }
+
+    pub fn directly_behind(&self, other: &HexCoord) -> bool {
+        self.q == other.q && self.r < other.r
+    }
 }
 
 impl std::ops::Add for HexCoord {
@@ -122,19 +138,21 @@ pub struct SelectedCell;
 pub enum HighlightedCellType {
     #[default]
     White,
+    Gray,
     Red,
     Blue,
     Green,
 }
 
 impl HighlightedCellType {
-    const VALUES: [Self; 4] = [Self::White, Self::Red, Self::Blue, Self::Green];
+    const VALUES: [Self; 5] = [Self::White, Self::Gray, Self::Red, Self::Blue, Self::Green];
 }
 
 impl From<HighlightedCellType> for LinearRgba {
     fn from(value: HighlightedCellType) -> Self {
         match value {
             HighlightedCellType::White => LinearRgba::WHITE,
+            HighlightedCellType::Gray => LinearRgba::gray(0.2),
             HighlightedCellType::Red => LinearRgba::RED,
             HighlightedCellType::Blue => LinearRgba::BLUE,
             HighlightedCellType::Green => LinearRgba::GREEN,
@@ -305,9 +323,9 @@ fn animate_highlighted_cell(
 ) {
     info!("highlighting cell");
     let highlight = highlight_query.get(trigger.entity).unwrap();
-    commands
-        .entity(trigger.entity)
-        .insert(MeshMaterial3d::from(materials.0.get(&highlight.ty).unwrap().clone()));
+    commands.entity(trigger.entity).insert(MeshMaterial3d::from(
+        materials.0.get(&highlight.ty).unwrap().clone(),
+    ));
 }
 
 fn deanimate_dehighlighted_cell(trigger: On<Remove, HighlightedCell>, mut commands: Commands) {
