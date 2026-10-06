@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy::{ecs::event::Trigger, platform::collections::HashMap, prelude::*};
+use bevy::{ecs::{event::Trigger, system::IntoObserverSystem}, platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_tweening::{
     AnimTarget, PlaybackDirection, PlaybackState, Tween, TweenAnim, Tweenable,
@@ -33,6 +33,7 @@ impl Plugin for ActionPlugin {
             .add_observer(deselect_action_on_card_deselect)
             .add_observer(highlight_action_owner_cell)
             .add_observer(highlight_front_target_cells)
+            .add_observer(activate_action_on_target_click)
             .configure_loading_state(
                 LoadingStateConfig::new(GameState::AssetLoading).load_collection::<CardAssets>(),
             );
@@ -165,8 +166,16 @@ pub struct Targettable;
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
+pub struct Target;
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
 #[require(HighlightedCell { ty: HighlightedCellType::Gray })]
 pub struct Untargettable;
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+pub struct InPlay;
 
 pub fn set_action_bar(mut commands: Commands) {
     commands.spawn((
@@ -362,6 +371,18 @@ fn highlight_action_owner_cell(
     info!("highlighted selected action owner");
 }
 
+fn deselect_action_cells_on_deselect(
+    trigger: On<Remove, SelectedAction>,
+    mut commands: Commands,
+    highlighted_query: Query<Entity, With<HighlightedCell>>,
+) {
+    for e_cell in highlighted_query {
+        commands
+            .entity(e_cell)
+            .remove::<(HighlightedCell, Targettable)>();
+    }
+}
+
 fn highlight_front_target_cells(
     trigger: On<Add, SelectedAction>,
     mut commands: Commands,
@@ -391,4 +412,22 @@ fn highlight_front_target_cells(
         //     commands.entity(e_cell).insert(Untargettable);
         // }
     }
+}
+
+fn activate_action_on_target_click(
+    trigger: On<Pointer<Click>>,
+    mut commands: Commands,
+    target_query: Query<(), With<Targettable>>,
+    action_query: Query<Entity, With<SelectedAction>>,
+) {
+    let Ok(()) = target_query.get(trigger.entity) else {
+        return;
+    };
+
+    let e_action = action_query.single().unwrap();
+    commands
+        .entity(e_action)
+        .insert(InPlay)
+        .remove::<SelectedAction>();
+    commands.entity(trigger.entity).insert(Target);
 }

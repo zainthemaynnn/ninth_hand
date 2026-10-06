@@ -1,4 +1,4 @@
-use bevy::{mesh::ExtrusionBuilder, prelude::*};
+use bevy::{mesh::ExtrusionBuilder, picking::hover::Hovered, prelude::*};
 use bevy_tweening::{AnimTarget, RepeatCount, RepeatStrategy, Tween, TweenAnim};
 use std::{
     collections::HashMap,
@@ -9,6 +9,7 @@ use std::{
 
 use crate::{
     asset::{GameState, MaterialEmissiveLens},
+    systems::{enforce_one, insert_on_hover, toggle_insert_on_click, uninsert_on_unhover},
     turn::{Cpu, Player, Team},
 };
 
@@ -24,8 +25,12 @@ impl Plugin for FieldPlugin {
                 OnEnter(GameState::AssetLoading),
                 animate_highlighted_cell_material,
             )
-            .add_observer(select_cell_on_click)
-            .add_observer(deselect_preselected_cell)
+            .add_observer(toggle_insert_on_click::<SelectedCell, With<FieldCell>>)
+            .add_observer(insert_on_hover::<HoveredCell, With<FieldCell>>)
+            .add_observer(uninsert_on_unhover::<HoveredCell, With<FieldCell>>)
+            .add_observer(enforce_one::<SelectedCell>)
+            // not sure if this is still needed yet; might still be short periods where two exist
+            // .add_observer(enforce_one::<HoveredCell>)
             .add_observer(animate_highlighted_cell)
             .add_observer(deanimate_dehighlighted_cell)
             .add_observer(dehighlight_deselected_cell);
@@ -127,12 +132,16 @@ impl FromWorld for HexMesh {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 #[component(storage = "SparseSet")]
 #[require(
     HighlightedCell { ty: HighlightedCellType::Red },
 )]
 pub struct SelectedCell;
+
+#[derive(Component, Default)]
+#[component(storage = "SparseSet")]
+pub struct HoveredCell;
 
 #[derive(Component, Copy, Clone, Default, Hash, Eq, PartialEq)]
 pub enum HighlightedCellType {
@@ -287,34 +296,6 @@ fn animate_highlighted_cell_material(
     }
 }
 
-fn select_cell_on_click(
-    trigger: On<Pointer<Click>>,
-    cell_query: Query<Option<&SelectedCell>, With<FieldCell>>,
-    mut commands: Commands,
-) {
-    if let Ok(selected) = cell_query.get(trigger.entity) {
-        if selected.is_none() {
-            commands.entity(trigger.entity).insert(SelectedCell);
-        } else {
-            commands.entity(trigger.entity).remove::<SelectedCell>();
-        }
-    }
-}
-
-fn deselect_preselected_cell(
-    trigger: On<Add, SelectedCell>,
-    mut commands: Commands,
-    selected_query: Query<Entity, With<SelectedCell>>,
-) {
-    for e_old in selected_query {
-        if e_old == trigger.entity {
-            continue;
-        }
-
-        commands.entity(e_old).remove::<SelectedCell>();
-    }
-}
-
 fn animate_highlighted_cell(
     trigger: On<Add, HighlightedCell>,
     mut commands: Commands,
@@ -336,10 +317,6 @@ fn deanimate_dehighlighted_cell(trigger: On<Remove, HighlightedCell>, mut comman
 
 fn dehighlight_deselected_cell(trigger: On<Remove, SelectedCell>, mut commands: Commands) {
     commands.entity(trigger.entity).remove::<HighlightedCell>();
-}
-
-fn cell_details_on_hover() {
-    todo!();
 }
 
 #[cfg(test)]

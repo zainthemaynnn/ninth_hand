@@ -28,6 +28,7 @@ pub mod enemy;
 pub mod field;
 pub mod nine;
 pub mod symmetra;
+pub mod systems;
 pub mod turn;
 pub mod ui;
 pub mod unit;

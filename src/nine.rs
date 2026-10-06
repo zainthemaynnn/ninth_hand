@@ -1,12 +1,16 @@
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{ecs::system::IntoObserverSystem, platform::collections::HashMap, prelude::*};
 
 use crate::{
-    actions::{Action, CardArt, tags::*},
-    damage::{DamageVariant, Health, HealthCap, Resist},
-    field::Field,
-    turn::{Ally, Cpu, Player, Rival, TurnState},
-    unit::{Unit, UnitDesc},
+    actions::{Action, ActionHandler, CardArt, InPlay, Target, tags::*}, damage::{Damage, DamageBuffer, DamageVariant, Health, HealthCap, Resist}, field::{Field, OccupiedByUnit}, turn::{Ally, Cpu, Player, Rival, TurnState}, unit::{Unit, UnitDesc},
 };
+
+pub struct NinePlugin;
+
+impl Plugin for NinePlugin {
+    fn build(&self, app: &mut App) {
+        app.add_observer(Crush::play);
+    }
+}
 
 #[derive(Component)]
 #[require(
@@ -45,14 +49,29 @@ pub struct HandOwnedBy(Entity);
 )]
 pub struct Crush;
 
-pub fn play_crush(
-    ally_field: Res<Field<Player>>,
-    rival_field: Res<Field<Cpu>>,
-    mut turn_state: ResMut<NextState<TurnState>>,
-    unit_query: Query<(&OwnsHand), With<Nine>>,
-    mut hand_query: Query<(&mut Transform,)>,
-) {
-    todo!();
+impl Crush {
+    fn play(
+        trigger: On<Add, InPlay>,
+        crush_query: Query<(), With<Crush>>,
+        target_query: Query<(Entity, &OccupiedByUnit), With<Target>>,
+        mut enemy_query: Query<&mut DamageBuffer>,
+        unit_query: Query<(Entity, &OwnsHand), With<Nine>>,
+        mut hand_query: Query<(&mut Transform,)>,
+    ) {
+        if !crush_query.contains(trigger.entity) {
+            return;
+        }
+
+        let (e_cell, OccupiedByUnit(&e_target)) = target_query.single().unwrap();
+        let (e_unit, owns_hand) = unit_query.single().unwrap();
+
+        let mut damage_buffer = enemy_query.get_mut(e_target).unwrap();
+        damage_buffer.0.push(crate::damage::Damage {
+            ty: DamageVariant::Bash,
+            value: 5f32,
+            source: Some(e_unit),
+        });
+    }
 }
 
 #[derive(Component)]

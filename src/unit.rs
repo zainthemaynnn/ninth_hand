@@ -3,7 +3,8 @@ use bevy::{color::palettes, math::VectorSpace, prelude::*};
 use crate::{
     asset::GameState,
     damage::{DamageAssets, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
-    field::{Field, HexCoord, OccupiedByUnit, OccupyingCell, SelectedCell},
+    field::{Field, HexCoord, HoveredCell, OccupiedByUnit, OccupyingCell, SelectedCell},
+    systems::enforce_one,
     turn::{Cpu, Player, Team},
 };
 
@@ -13,11 +14,13 @@ impl Plugin for UnitPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::InGame), spawn_unit_details_window)
             .add_systems(Update, (reposition::<Player>, reposition::<Cpu>))
+            .add_observer(show_unit_details)
+            .add_observer(hide_unit_details)
             .add_observer(show_unit_health)
             .add_observer(show_unit_resist)
             .add_observer(show_unit_text)
             .add_observer(select_unit)
-            .add_observer(deselect_preselected_unit);
+            .add_observer(enforce_one::<HoveredUnit>);
     }
 }
 
@@ -40,7 +43,7 @@ pub struct UnitDesc {
 
 #[derive(Component)]
 #[component(storage = "SparseSet")]
-pub struct SelectedUnit;
+pub struct HoveredUnit;
 
 #[derive(Resource)]
 pub struct ActiveUnits(pub Vec<Entity>);
@@ -86,10 +89,10 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
         Box::new(resist_value_l),
     ];
 
-    error!("spawned!");
     commands.spawn_scene(bsn! {
         #MainWindow
         UnitDetailsWindow
+        Visibility::Hidden
         Node {
             position_type: PositionType::Absolute,
             top: Val::ZERO,
@@ -210,8 +213,25 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
     });
 }
 
+pub fn show_unit_details(
+    trigger: On<Add, HoveredUnit>,
+    mut ui_query: Query<&mut Visibility, With<UnitDetailsWindow>>,
+) {
+    let mut visibility = ui_query.single_mut().unwrap();
+    *visibility = Visibility::Visible;
+}
+
+pub fn hide_unit_details(
+    trigger: On<Remove, HoveredUnit>,
+    mut ui_query: Query<&mut Visibility, With<UnitDetailsWindow>>,
+) {
+    info!("hide");
+    let mut visibility = ui_query.single_mut().unwrap();
+    *visibility = Visibility::Hidden;
+}
+
 pub fn show_unit_health(
-    trigger: On<Add, SelectedUnit>,
+    trigger: On<Add, HoveredUnit>,
     unit_query: Query<(&Health, &HealthCap)>,
     mut health_bar_query: Query<&mut Node, With<HealthBar>>,
 ) {
@@ -222,7 +242,7 @@ pub fn show_unit_health(
 }
 
 pub fn show_unit_resist(
-    trigger: On<Add, SelectedUnit>,
+    trigger: On<Add, HoveredUnit>,
     mut commands: Commands,
     unit_query: Query<&Resist>,
     mut resist_query: Query<(&mut Text, &mut TextColor, &UnitResistDetailsVariant)>,
@@ -245,7 +265,7 @@ pub fn show_unit_resist(
 }
 
 pub fn show_unit_text(
-    trigger: On<Add, SelectedUnit>,
+    trigger: On<Add, HoveredUnit>,
     unit_query: Query<&UnitDesc>,
     mut text_query: ParamSet<(
         Query<&mut Text, With<UnitName>>,
@@ -260,35 +280,19 @@ pub fn show_unit_text(
 }
 
 pub fn select_unit(
-    trigger: On<Add, SelectedCell>,
+    trigger: On<Add, HoveredCell>,
     mut commands: Commands,
     cell_query: Query<Option<&OccupiedByUnit>>,
-    selected_query: Query<Entity, With<SelectedUnit>>,
+    selected_query: Query<Entity, With<HoveredUnit>>,
 ) {
-    info!("select");
     if let Some(e_unit) = cell_query.get(trigger.entity).unwrap() {
-        info!("found");
         // lol?? how do you actually get the entity in here?
         commands
             .entity(e_unit.iter().next().unwrap())
-            .insert(SelectedUnit);
+            .insert(HoveredUnit);
     } else {
         if let Ok(e_unit) = selected_query.single() {
-            commands.entity(e_unit).remove::<SelectedUnit>();
+            commands.entity(e_unit).remove::<HoveredUnit>();
         }
-    }
-}
-
-fn deselect_preselected_unit(
-    trigger: On<Add, SelectedUnit>,
-    mut commands: Commands,
-    selected_query: Query<Entity, With<SelectedUnit>>,
-) {
-    for e_old in selected_query {
-        if e_old == trigger.entity {
-            continue;
-        }
-
-        commands.entity(e_old).remove::<SelectedUnit>();
     }
 }
