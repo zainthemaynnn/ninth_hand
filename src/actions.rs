@@ -11,7 +11,7 @@ use rand::seq::SliceRandom;
 use crate::{
     actions::tags::FrontTarget,
     asset::GameState,
-    field::{HexCoord, HighlightedCell, HighlightedCellType, OccupyingCell},
+    field::{HexCoord, HighlightedCell, Highlighter, OccupyingCell},
     turn::Rival,
     unit::Unit,
 };
@@ -161,7 +161,7 @@ pub struct OwnsAction(Vec<Entity>);
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
-#[require(HighlightedCell { ty: HighlightedCellType::Red })]
+#[require(HighlightedCell { ty: Highlighter::Red })]
 pub struct Targettable;
 
 #[derive(Component, Debug, Default)]
@@ -170,7 +170,7 @@ pub struct Target;
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
-#[require(HighlightedCell { ty: HighlightedCellType::Gray })]
+#[require(HighlightedCell { ty: Highlighter::Gray })]
 pub struct Untargettable;
 
 #[derive(Component, Debug, Default)]
@@ -366,7 +366,7 @@ fn highlight_action_owner_cell(
     };
 
     commands.entity(*e_cell).insert(HighlightedCell {
-        ty: HighlightedCellType::Blue,
+        ty: Highlighter::Blue,
     });
     info!("highlighted selected action owner");
 }

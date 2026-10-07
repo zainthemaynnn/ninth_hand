@@ -18,12 +18,12 @@ pub struct FieldPlugin;
 impl Plugin for FieldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<HexMesh>()
-            .init_resource::<HighlightedCellMaterials>()
+            .init_resource::<HighlighterMaterials>()
             .init_resource::<Field<Player>>()
             .init_resource::<Field<Cpu>>()
             .add_systems(
                 OnEnter(GameState::AssetLoading),
-                animate_highlighted_cell_material,
+                animate_highlighter_materials,
             )
             .add_observer(toggle_insert_on_click::<SelectedCell, With<FieldCell>>)
             .add_observer(insert_on_hover::<HoveredCell, With<FieldCell>>)
@@ -135,7 +135,7 @@ impl FromWorld for HexMesh {
 #[derive(Component, Default)]
 #[component(storage = "SparseSet")]
 #[require(
-    HighlightedCell { ty: HighlightedCellType::Red },
+    HighlightedCell { ty: Highlighter::Red },
 )]
 pub struct SelectedCell;
 
@@ -144,7 +144,7 @@ pub struct SelectedCell;
 pub struct HoveredCell;
 
 #[derive(Component, Copy, Clone, Default, Hash, Eq, PartialEq)]
-pub enum HighlightedCellType {
+pub enum Highlighter {
     #[default]
     White,
     Gray,
@@ -153,18 +153,18 @@ pub enum HighlightedCellType {
     Green,
 }
 
-impl HighlightedCellType {
-    const VALUES: [Self; 5] = [Self::White, Self::Gray, Self::Red, Self::Blue, Self::Green];
+impl Highlighter {
+    pub const VALUES: [Self; 5] = [Self::White, Self::Gray, Self::Red, Self::Blue, Self::Green];
 }
 
-impl From<HighlightedCellType> for LinearRgba {
-    fn from(value: HighlightedCellType) -> Self {
+impl From<Highlighter> for LinearRgba {
+    fn from(value: Highlighter) -> Self {
         match value {
-            HighlightedCellType::White => LinearRgba::WHITE,
-            HighlightedCellType::Gray => LinearRgba::gray(0.2),
-            HighlightedCellType::Red => LinearRgba::RED,
-            HighlightedCellType::Blue => LinearRgba::BLUE,
-            HighlightedCellType::Green => LinearRgba::GREEN,
+            Highlighter::White => LinearRgba::WHITE,
+            Highlighter::Gray => LinearRgba::gray(0.2),
+            Highlighter::Red => LinearRgba::RED,
+            Highlighter::Blue => LinearRgba::BLUE,
+            Highlighter::Green => LinearRgba::GREEN,
         }
     }
 }
@@ -172,18 +172,18 @@ impl From<HighlightedCellType> for LinearRgba {
 #[derive(Component)]
 #[component(storage = "SparseSet")]
 pub struct HighlightedCell {
-    pub ty: HighlightedCellType,
+    pub ty: Highlighter,
 }
 
 #[derive(Resource)]
-pub struct HighlightedCellMaterials(pub HashMap<HighlightedCellType, Handle<StandardMaterial>>);
+pub struct HighlighterMaterials(pub HashMap<Highlighter, Handle<StandardMaterial>>);
 
-impl FromWorld for HighlightedCellMaterials {
+impl FromWorld for HighlighterMaterials {
     fn from_world(world: &mut World) -> Self {
         let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
         let handle = materials.add(StandardMaterial::default());
-        HighlightedCellMaterials(HashMap::from(
-            HighlightedCellType::VALUES.map(|v| (v, materials.add(StandardMaterial::default()))),
+        HighlighterMaterials(HashMap::from(
+            Highlighter::VALUES.map(|v| (v, materials.add(StandardMaterial::default()))),
         ))
     }
 }
@@ -274,9 +274,9 @@ pub fn load_field<T: Team>(
     info!("loaded hex cells {:?}", &coords);
 }
 
-fn animate_highlighted_cell_material(
+fn animate_highlighter_materials(
     mut commands: Commands,
-    materials: Res<HighlightedCellMaterials>,
+    materials: Res<HighlighterMaterials>,
 ) {
     for (v, material) in materials.0.iter() {
         let selection_tween = Tween::new(
@@ -299,7 +299,7 @@ fn animate_highlighted_cell_material(
 fn animate_highlighted_cell(
     trigger: On<Add, HighlightedCell>,
     mut commands: Commands,
-    materials: Res<HighlightedCellMaterials>,
+    materials: Res<HighlighterMaterials>,
     highlight_query: Query<&HighlightedCell>,
 ) {
     info!("highlighting cell");

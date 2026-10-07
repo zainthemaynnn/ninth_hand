@@ -24,6 +24,7 @@ use crate::{
 pub mod actions;
 pub mod asset;
 pub mod damage;
+pub mod director;
 pub mod enemy;
 pub mod field;
 pub mod nine;
