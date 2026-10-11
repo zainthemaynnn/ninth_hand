@@ -86,6 +86,12 @@ pub mod tags {
     pub struct AllyTarget;
 
     #[derive(Component, Default)]
+    pub struct AnyTarget;
+
+    #[derive(Component, Default)]
+    pub struct CellTarget;
+
+    #[derive(Component, Default)]
     pub struct Pierce;
 
     #[derive(Component, Default)]
