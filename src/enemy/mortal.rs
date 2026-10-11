@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::{turn::Cpu, unit::{Unit, UnitDesc}};
+use crate::{
+    turn::Cpu,
+    unit::{Unit, UnitDesc},
+};
 
 #[derive(Component)]
 #[require(

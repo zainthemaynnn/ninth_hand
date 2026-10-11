@@ -35,7 +35,7 @@ impl Default for UiRumble {
     }
 }
 
-pub fn do_rumble(mut rumble_query: Query<(&mut UiTransform, &mut UiRumble)>, time: Res<Time>) {
+pub fn do_rumble(rumble_query: Query<(&mut UiTransform, &mut UiRumble)>, time: Res<Time>) {
     for (mut tf, mut rumble) in rumble_query {
         rumble.t += time.delta_secs() * rumble.speed;
 

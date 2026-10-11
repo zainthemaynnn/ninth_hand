@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use bevy::{ecs::relationship::Relationship, prelude::*};
+use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
-use bevy_tweening::{PlaybackDirection, PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
+use bevy_tweening::{PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
 use rand::seq::IteratorRandom;
 
 use crate::{
@@ -27,7 +27,7 @@ pub enum TurnState {
 #[derive(AssetCollection, Resource)]
 struct TurnUiAssets {
     #[asset(path = "img/smile.png")]
-    pub smile: Handle<Image>,
+    pub _smile: Handle<Image>,
 }
 
 pub struct TurnPlugin;
@@ -169,7 +169,7 @@ pub fn insert_player_turn_button(mut commands: Commands) {
 pub fn show_player_turn_button(mut button_query: Query<&mut TweenAnim, With<EndTurnButton>>) {
     let mut anim = button_query.single_mut().unwrap();
 
-    let mut show_tween = Tween::new(
+    let show_tween = Tween::new(
         EaseFunction::QuadraticIn,
         Duration::from_millis(200),
         UiRightLens {
@@ -178,14 +178,14 @@ pub fn show_player_turn_button(mut button_query: Query<&mut TweenAnim, With<EndT
         },
     );
 
-    anim.set_tweenable(show_tween);
+    anim.set_tweenable(show_tween).unwrap();
     anim.playback_state = PlaybackState::Playing;
 }
 
 pub fn hide_player_turn_button(mut button_query: Query<&mut TweenAnim, With<EndTurnButton>>) {
     let mut anim = button_query.single_mut().unwrap();
 
-    let mut hide_tween = Tween::new(
+    let hide_tween = Tween::new(
         EaseFunction::QuadraticIn,
         Duration::from_millis(200),
         UiRightLens {
@@ -194,7 +194,7 @@ pub fn hide_player_turn_button(mut button_query: Query<&mut TweenAnim, With<EndT
         },
     );
 
-    anim.set_tweenable(hide_tween);
+    anim.set_tweenable(hide_tween).unwrap();
     anim.playback_state = PlaybackState::Playing;
 }
 

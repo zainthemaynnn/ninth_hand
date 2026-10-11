@@ -1,10 +1,9 @@
 use std::time::Duration;
 
-use bevy::{ecs::{event::Trigger, system::IntoObserverSystem}, platform::collections::HashMap, prelude::*};
+use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_tweening::{
-    AnimTarget, PlaybackDirection, PlaybackState, Tween, TweenAnim, Tweenable,
-    lens::{UiPositionLens, UiTransformTranslationPxLens},
+    PlaybackDirection, PlaybackState, Tween, TweenAnim, Tweenable, lens::UiPositionLens,
 };
 use rand::seq::SliceRandom;
 
@@ -31,6 +30,7 @@ impl Plugin for ActionPlugin {
             .add_observer(deselect_card_animation)
             .add_observer(select_action_on_card_select)
             .add_observer(deselect_action_on_card_deselect)
+            .add_observer(deselect_action_cells_on_deselect)
             .add_observer(highlight_action_owner_cell)
             .add_observer(highlight_front_target_cells)
             .add_observer(activate_action_on_target_click)
@@ -378,7 +378,7 @@ fn highlight_action_owner_cell(
 }
 
 fn deselect_action_cells_on_deselect(
-    trigger: On<Remove, SelectedAction>,
+    _trigger: On<Remove, SelectedAction>,
     mut commands: Commands,
     highlighted_query: Query<Entity, With<HighlightedCell>>,
 ) {
@@ -406,7 +406,7 @@ fn highlight_front_target_cells(
         .collect::<Vec<_>>();
 
     if let Some(max_row) = enemy_positions.iter().map(|&(_, coord)| coord.row()).max() {
-        let (targets, non_targets): (Vec<_>, Vec<_>) = enemy_positions
+        let (targets, _non_targets): (Vec<_>, Vec<_>) = enemy_positions
             .into_iter()
             .partition(|&(_, coord)| coord.row() == max_row);
 

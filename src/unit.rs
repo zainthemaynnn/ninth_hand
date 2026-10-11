@@ -3,7 +3,7 @@ use bevy::{color::palettes, math::VectorSpace, prelude::*};
 use crate::{
     asset::GameState,
     damage::{DamageAssets, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
-    field::{Field, HexCoord, HoveredCell, OccupiedByUnit, OccupyingCell, SelectedCell},
+    field::{Field, HexCoord, HoveredCell, OccupiedByUnit, OccupyingCell},
     systems::enforce_one,
     turn::{Cpu, Player, Team},
 };
@@ -214,7 +214,7 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
 }
 
 pub fn show_unit_details(
-    trigger: On<Add, HoveredUnit>,
+    _trigger: On<Add, HoveredUnit>,
     mut ui_query: Query<&mut Visibility, With<UnitDetailsWindow>>,
 ) {
     let mut visibility = ui_query.single_mut().unwrap();
@@ -222,7 +222,7 @@ pub fn show_unit_details(
 }
 
 pub fn hide_unit_details(
-    trigger: On<Remove, HoveredUnit>,
+    _trigger: On<Remove, HoveredUnit>,
     mut ui_query: Query<&mut Visibility, With<UnitDetailsWindow>>,
 ) {
     info!("hide");
@@ -243,9 +243,9 @@ pub fn show_unit_health(
 
 pub fn show_unit_resist(
     trigger: On<Add, HoveredUnit>,
-    mut commands: Commands,
+    _commands: Commands,
     unit_query: Query<&Resist>,
-    mut resist_query: Query<(&mut Text, &mut TextColor, &UnitResistDetailsVariant)>,
+    resist_query: Query<(&mut Text, &mut TextColor, &UnitResistDetailsVariant)>,
 ) {
     let resist = unit_query.get(trigger.entity).unwrap();
 

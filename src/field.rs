@@ -1,4 +1,4 @@
-use bevy::{mesh::ExtrusionBuilder, picking::hover::Hovered, prelude::*};
+use bevy::{mesh::ExtrusionBuilder, prelude::*};
 use bevy_tweening::{AnimTarget, RepeatCount, RepeatStrategy, Tween, TweenAnim};
 use std::{
     collections::HashMap,
@@ -181,7 +181,7 @@ pub struct HighlighterMaterials(pub HashMap<Highlighter, Handle<StandardMaterial
 impl FromWorld for HighlighterMaterials {
     fn from_world(world: &mut World) -> Self {
         let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
-        let handle = materials.add(StandardMaterial::default());
+        let _handle = materials.add(StandardMaterial::default());
         HighlighterMaterials(HashMap::from(
             Highlighter::VALUES.map(|v| (v, materials.add(StandardMaterial::default()))),
         ))
@@ -274,10 +274,7 @@ pub fn load_field<T: Team>(
     info!("loaded hex cells {:?}", &coords);
 }
 
-fn animate_highlighter_materials(
-    mut commands: Commands,
-    materials: Res<HighlighterMaterials>,
-) {
+fn animate_highlighter_materials(mut commands: Commands, materials: Res<HighlighterMaterials>) {
     for (v, material) in materials.0.iter() {
         let selection_tween = Tween::new(
             EaseFunction::SineInOut,
@@ -327,7 +324,7 @@ pub mod tests {
     pub fn adjacency() {
         let mut app = App::new();
 
-        app.insert_resource(Field::default());
+        app.insert_resource(Field::<Player>::default());
 
         let coords = [
             HexCoord { q: 0, r: 0 },
@@ -340,11 +337,11 @@ pub mod tests {
             let e_cell = app.world_mut().spawn((coord,)).id();
 
             app.world_mut()
-                .resource_mut::<Field>()
+                .resource_mut::<Field<Player>>()
                 .add_cell(e_cell, coord);
         }
 
-        let field = app.world_mut().resource::<Field>();
+        let field = app.world_mut().resource::<Field<Player>>();
         assert!(field.adjacent(coords[0]).len() == 2);
         assert!(field.adjacent(coords[1]).len() == 2);
         assert!(field.adjacent(coords[2]).len() == 2);

@@ -1,5 +1,4 @@
 #![feature(more_float_constants)]
-use std::f32::consts::PI;
 
 use bevy::{
     color::palettes::css::SILVER,
@@ -16,9 +15,10 @@ use crate::{
     enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
     field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
     nine::Nine,
+    symmetra::SymmetraPlugin,
     turn::{Cpu, Player, TurnPlugin},
     ui::NineUiPlugin,
-    unit::{Unit, UnitPlugin},
+    unit::UnitPlugin,
 };
 
 pub mod actions;
@@ -38,8 +38,6 @@ pub mod unit;
 struct NineAssets {
     #[asset(path = "gltf/nine.glb")]
     nine: Handle<Gltf>,
-    #[asset(path = "gltf/symmetra.glb")]
-    symmetra: Handle<Gltf>,
 }
 
 fn main() {
@@ -62,6 +60,7 @@ fn main() {
             NineUiPlugin,
             DamagePlugin,
             EnemyPlugin,
+            SymmetraPlugin,
         ))
         .configure_loading_state(
             LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
@@ -136,7 +135,7 @@ fn entry(
     enemy_assets: Res<EnemyAssets>,
     player_field: Res<Field<Player>>,
     cpu_field: Res<Field<Cpu>>,
-    tf_query: Query<&GlobalTransform>,
+    _tf_query: Query<&GlobalTransform>,
 ) {
     commands.spawn((
         PointLight {
@@ -168,7 +167,7 @@ fn entry(
         .id();
 
     let e_cell = cpu_field.cells.get(&HexCoord::new(1, -1)).unwrap();
-    let e_mortal = commands
+    let _e_mortal = commands
         .spawn((
             WorldAssetRoot(enemy_assets.mortal.clone()),
             Mortal,
@@ -177,7 +176,7 @@ fn entry(
         ))
         .id();
     let e_cell2 = cpu_field.cells.get(&HexCoord::new(0, -3)).unwrap();
-    let e_mortal2 = commands
+    let _e_mortal2 = commands
         .spawn((
             WorldAssetRoot(enemy_assets.mortal.clone()),
             Mortal,

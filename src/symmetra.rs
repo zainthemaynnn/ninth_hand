@@ -1,10 +1,15 @@
 use bevy::{platform::collections::HashMap, prelude::*};
+use bevy_asset_loader::prelude::*;
 
 use crate::{
-    actions::{Action, CardArt, InPlay, Target, tags::{self, *}},
+    actions::{
+        Action, CardArt, InPlay, Target,
+        tags::{self, *},
+    },
+    asset::GameState,
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
     field::{FieldCell, OccupiedByUnit},
-    turn::{Ally, Cpu, Player, Rival, TurnState},
+    turn::Player,
     unit::{Unit, UnitDesc},
 };
 
@@ -12,13 +17,22 @@ pub struct SymmetraPlugin;
 
 impl Plugin for SymmetraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(glyph_on_cell_enter::<RedGlyph>)
-            .add_observer(glyph_on_cell_enter::<BlueGlyph>)
-            .add_observer(glyph_on_cell_enter::<GreenGlyph>)
-            .add_observer(place_glyphs_on_action::<SummonRedGlyph, RedGlyph>)
-            .add_observer(place_glyphs_on_action::<SummonBlueGlyph, BlueGlyph>)
-            .add_observer(place_glyphs_on_action::<SummonGreenGlyph, GreenGlyph>);
+        app.configure_loading_state(
+            LoadingStateConfig::new(GameState::AssetLoading).load_collection::<SymmetraAssets>(),
+        )
+        .add_observer(glyph_on_cell_enter::<RedGlyph>)
+        .add_observer(glyph_on_cell_enter::<BlueGlyph>)
+        .add_observer(glyph_on_cell_enter::<GreenGlyph>)
+        .add_observer(place_glyphs_on_action::<SummonRedGlyph, RedGlyph>)
+        .add_observer(place_glyphs_on_action::<SummonBlueGlyph, BlueGlyph>)
+        .add_observer(place_glyphs_on_action::<SummonGreenGlyph, GreenGlyph>);
     }
+}
+
+#[derive(AssetCollection, Resource)]
+struct SymmetraAssets {
+    #[asset(path = "gltf/symmetra.glb")]
+    pub _model: Handle<Gltf>,
 }
 
 #[derive(Component)]
@@ -132,7 +146,7 @@ pub fn place_glyphs_on_action<A: Component, T: SimpleGlyph + Default>(
     }
 
     for e_target in target_query {
-    	commands.entity(e_target).insert(T::default());
+        commands.entity(e_target).insert(T::default());
     }
 }
 
@@ -141,7 +155,7 @@ pub fn glyph_on_cell_enter<T: SimpleGlyph>(
     cell_query: Query<(&Glyph, &T, &OccupiedByUnit), With<T>>,
     mut damage_events: MessageWriter<DamageEvent>,
 ) {
-    let Ok((glyph, glyph_ty, occupied_by)) = cell_query.get(trigger.entity) else {
+    let Ok((glyph, _glyph_ty, occupied_by)) = cell_query.get(trigger.entity) else {
         return;
     };
 
