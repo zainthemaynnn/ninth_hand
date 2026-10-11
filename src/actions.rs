@@ -5,7 +5,7 @@ use bevy_asset_loader::prelude::*;
 use bevy_tweening::{
     PlaybackDirection, PlaybackState, Tween, TweenAnim, Tweenable, lens::UiPositionLens,
 };
-use rand::seq::SliceRandom;
+use rand::seq::{IteratorRandom, SliceRandom};
 
 use crate::{
     actions::tags::FrontTarget,
@@ -21,7 +21,8 @@ pub struct ActionPlugin;
 
 impl Plugin for ActionPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(GameState::InGame), set_action_bar)
+        app.add_message::<DrawEvent>()
+            .add_systems(OnEnter(GameState::InGame), set_action_bar)
             .add_systems(
                 Update,
                 (update_action_bar, select_deselect_card).run_if(in_state(GameState::InGame)),
@@ -46,23 +47,44 @@ pub struct Action {
     pub description: &'static str,
 }
 
-#[derive(Component)]
-pub struct AvailableAction;
+#[derive(Message)]
+pub struct DrawEvent {
+    pub amount: usize,
+    pub unit: Entity,
+}
 
-pub fn draw_typed<T: Component>(
+#[derive(Component)]
+pub struct DrawCount {
+    pub amount: usize,
+}
+
+pub fn draw_actions(
     mut commands: Commands,
-    q_actions: Query<Entity, (With<Action>, With<T>)>,
+    mut draw_events: MessageReader<DrawEvent>,
+    collection_query: Query<&OwnsAction>,
+    available_query: Query<(), With<AvailableAction>>,
 ) {
     let mut rng = rand::rng();
-    let n = 3;
+    for DrawEvent {
+        amount,
+        unit: e_unit,
+    } in draw_events.read()
+    {
+        let owns_action = collection_query.get(*e_unit).unwrap();
 
-    let mut entities: Vec<Entity> = q_actions.iter().collect();
+        let selected_actions = owns_action
+            .iter()
+            .filter(|e_action| !available_query.contains(*e_action))
+            .sample(&mut rng, *amount);
 
-    entities.shuffle(&mut rng);
-    for e_action in &entities[0..n.min(entities.len())] {
-        commands.entity(*e_action).insert(AvailableAction);
+        for e_action in selected_actions {
+            commands.entity(e_action).insert(AvailableAction);
+        }
     }
 }
+
+#[derive(Component)]
+pub struct AvailableAction;
 
 pub mod tags {
     use bevy::prelude::*;

@@ -9,16 +9,7 @@ use bevy_asset_loader::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::{ActionPlugin, AvailableAction, OwnedByUnit},
-    asset::{GameState, NineAssetPlugin},
-    damage::{DamagePlugin, Health},
-    enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
-    field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
-    nine::Nine,
-    symmetra::SymmetraPlugin,
-    turn::{Cpu, Player, TurnPlugin},
-    ui::NineUiPlugin,
-    unit::UnitPlugin,
+    actions::{ActionPlugin, AvailableAction, OwnedByUnit}, asset::{GameState, NineAssetPlugin}, damage::{DamagePlugin, Health}, enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal}, field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field}, nine::Nine, status::StatusPlugin, symmetra::SymmetraPlugin, turn::{Cpu, Player, TurnPlugin}, ui::NineUiPlugin, unit::UnitPlugin,
 };
 
 pub mod actions;
@@ -62,6 +53,7 @@ fn main() {
             DamagePlugin,
             EnemyPlugin,
             SymmetraPlugin,
+            StatusPlugin,
         ))
         .configure_loading_state(
             LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),

@@ -6,7 +6,7 @@ use bevy_tweening::{PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
 use rand::seq::IteratorRandom;
 
 use crate::{
-    actions::{AvailableAction, OwnsAction},
+    actions::{AvailableAction, DrawCount, DrawEvent, OwnsAction, draw_actions},
     asset::{GameState, UiRightLens},
     systems::countdown_to_state,
     ui::UiRumble,
@@ -24,12 +24,6 @@ pub enum TurnState {
     NeutralBusy,
 }
 
-#[derive(AssetCollection, Resource)]
-struct TurnUiAssets {
-    #[asset(path = "img/smile.png")]
-    pub _smile: Handle<Image>,
-}
-
 pub struct TurnPlugin;
 
 impl Plugin for TurnPlugin {
@@ -45,7 +39,7 @@ impl Plugin for TurnPlugin {
                     set_ally_rival::<Player, Cpu>,
                     show_player_turn_button,
                     remove_all_available_actions,
-                    shuffle_unit_actions::<Player>,
+                    shuffle_unit_actions::<Player>.before(draw_actions),
                 ),
             )
             .add_systems(OnEnter(TurnState::PlayerBusy), hide_player_turn_button)
@@ -60,7 +54,7 @@ impl Plugin for TurnPlugin {
                 (
                     set_ally_rival::<Cpu, Player>,
                     remove_all_available_actions,
-                    shuffle_unit_actions::<Cpu>,
+                    shuffle_unit_actions::<Cpu>.before(draw_actions),
                     advance_enemy_turn,
                 ),
             )
@@ -71,6 +65,12 @@ impl Plugin for TurnPlugin {
             // placeholders for now
             .add_systems(OnEnter(TurnState::Neutral), advance_neutral_turn);
     }
+}
+
+#[derive(AssetCollection, Resource)]
+struct TurnUiAssets {
+    #[asset(path = "img/smile.png")]
+    pub _smile: Handle<Image>,
 }
 
 /// Describes components related to the current turn's player.
@@ -267,21 +267,14 @@ pub fn remove_all_available_actions(
     }
 }
 
-#[derive(Component)]
-pub struct DrawCount {
-    pub amount: usize,
-}
-
 pub fn shuffle_unit_actions<T: Team>(
-    mut commands: Commands,
-    collection_query: Query<(&OwnsAction, &DrawCount), With<T>>,
+    mut draw_events: MessageWriter<DrawEvent>,
+    collection_query: Query<(Entity, &DrawCount), With<T>>,
 ) {
-    let mut rng = rand::rng();
-    for (owns_action, draw_count) in collection_query {
-        let selected_actions = owns_action.iter().sample(&mut rng, draw_count.amount);
-
-        for e_action in selected_actions {
-            commands.entity(e_action).insert(AvailableAction);
-        }
+    for (e_unit, draw_count) in collection_query {
+        draw_events.write(DrawEvent {
+            amount: draw_count.amount,
+            unit: e_unit,
+        });
     }
 }

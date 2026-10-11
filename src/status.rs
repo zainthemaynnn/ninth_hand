@@ -3,8 +3,9 @@ use std::marker::PhantomData;
 use bevy::{color::palettes, prelude::*};
 
 use crate::{
+    actions::{DrawCount, DrawEvent, draw_actions},
     damage::{Damage, DamageEvent, DamageVariant, apply_damage_events},
-    turn::TurnState,
+    turn::{Cpu, Player, TurnState, shuffle_unit_actions},
 };
 
 pub struct StatusPlugin;
@@ -23,10 +24,15 @@ impl Plugin for StatusPlugin {
             Update,
             (
                 apply_marks.before(apply_damage_events),
+                apply_daze
+                    .after(shuffle_unit_actions::<Player>)
+                    .after(shuffle_unit_actions::<Cpu>)
+                    .before(draw_actions),
                 remove_expired_effects::<Burn>,
                 remove_expired_effects::<Frostbite>,
                 remove_expired_effects::<Affliction>,
                 remove_expired_effects::<Mark>,
+                remove_expired_effects::<Daze>,
             ),
         );
     }
@@ -34,7 +40,7 @@ impl Plugin for StatusPlugin {
 
 #[derive(Component)]
 pub struct Stacks<S: Status> {
-    pub value: u32,
+    pub value: usize,
     pub phantom_data: PhantomData<S>,
 }
 
@@ -48,12 +54,12 @@ impl<S: Status> Default for Stacks<S> {
 }
 
 impl<S: Status> Stacks<S> {
-    pub fn value(&self) -> u32 {
+    pub fn value(&self) -> usize {
         self.value
     }
 
-    pub fn consume(&mut self, amount: u32) {
-        self.value -= amount;
+    pub fn consume(&mut self, amount: usize) {
+        self.value = std::cmp::max(self.value - amount, 0);
     }
 }
 
@@ -121,7 +127,9 @@ pub fn remove_expired_effects<S: Status>(
     }
 }
 
+/// Doubles the next instance of damage.
 #[derive(Component)]
+#[require(Stacks<Mark>)]
 pub struct Mark;
 
 impl Status for Mark {
@@ -138,6 +146,30 @@ pub fn apply_marks(
         if let Ok(mut stacks) = mark_query.get_mut(event.target) {
             event.damage *= 2.0;
             stacks.consume(1);
+        }
+    }
+}
+
+/// The unit draws less actions, equal to stacks. Consumed for each draw prevented.
+#[derive(Component)]
+#[require(Stacks<Daze>)]
+pub struct Daze;
+
+impl Status for Daze {
+    fn color() -> Color {
+        Color::Srgba(palettes::css::INDIGO)
+    }
+}
+
+pub fn apply_daze(
+    mut draw_events: MessageMutator<DrawEvent>,
+    mut daze_query: Query<(&mut Stacks<Daze>, &mut DrawCount)>,
+) {
+    for event in draw_events.read() {
+        if let Ok((mut stacks, mut draw_count)) = daze_query.get_mut(event.unit) {
+            let penalty = std::cmp::min(stacks.value, draw_count.amount);
+            draw_count.amount -= penalty;
+            stacks.consume(penalty);
         }
     }
 }
