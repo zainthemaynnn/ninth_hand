@@ -1,7 +1,7 @@
-use bevy::{ecs::component::Mutable, prelude::*};
+use bevy::{color::palettes, ecs::component::Mutable, prelude::*};
 
 use crate::{
-    damage::{Damage, DamageEvent, DamageVariant},
+    damage::{Damage, DamageEvent, DamageVariant, apply_damage_events},
     turn::TurnState,
 };
 
@@ -12,18 +12,20 @@ impl Plugin for StatusPlugin {
         app.add_systems(
             OnEnter(TurnState::Neutral),
             (
-                (
-                    apply_dot_damage_events::<Burn>,
-                    apply_dot_damage_events::<Frostbite>,
-                    apply_dot_damage_events::<Affliction>,
-                ),
-                (
-                    remove_expired_effects::<Burn>,
-                    remove_expired_effects::<Frostbite>,
-                    remove_expired_effects::<Affliction>,
-                ),
-            )
-                .chain(),
+                apply_dot_damage_events::<Burn>,
+                apply_dot_damage_events::<Frostbite>,
+                apply_dot_damage_events::<Affliction>,
+            ),
+        )
+        .add_systems(
+            Update,
+            (
+                apply_marks.before(apply_damage_events),
+                remove_expired_effects::<Burn>,
+                remove_expired_effects::<Frostbite>,
+                remove_expired_effects::<Affliction>,
+                remove_expired_effects::<Mark>,
+            ),
         );
     }
 }
@@ -31,6 +33,7 @@ impl Plugin for StatusPlugin {
 pub trait Status: Component {
     fn stacks(&self) -> u32;
     fn consume(&mut self, amount: u32);
+    fn color() -> Color;
 }
 
 pub trait DotDamageEffect: Status {
@@ -39,8 +42,8 @@ pub trait DotDamageEffect: Status {
 
 macro_rules! create_dot_effect {
     ($name:ident, $damage_ty:expr) => {
-    	/// DOT status effect with
-    	#[doc = stringify!($damage_ty)]
+        /// DOT status effect with
+        #[doc = stringify!($damage_ty)]
         #[derive(Component)]
         pub struct $name {
             pub stacks: u32,
@@ -53,6 +56,10 @@ macro_rules! create_dot_effect {
 
             fn consume(&mut self, amount: u32) {
                 self.stacks -= amount
+            }
+
+            fn color() -> Color {
+                $damage_ty.color()
             }
         }
 
@@ -94,6 +101,37 @@ pub fn remove_expired_effects<S: Status>(
     for (e_effect, status) in effect_query {
         if status.stacks() == 0 {
             commands.entity(e_effect).remove::<S>();
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct Mark {
+    pub stacks: u32,
+}
+
+impl Status for Mark {
+    fn stacks(&self) -> u32 {
+        self.stacks
+    }
+
+    fn consume(&mut self, amount: u32) {
+        self.stacks -= amount
+    }
+
+    fn color() -> Color {
+        Color::Srgba(palettes::css::CRIMSON)
+    }
+}
+
+pub fn apply_marks(
+    mut damage_events: MessageMutator<DamageEvent>,
+    mut mark_query: Query<&mut Mark>,
+) {
+    for event in damage_events.read() {
+        if let Ok(mut mark) = mark_query.get_mut(event.target) {
+            event.damage *= 2.0;
+            mark.consume(1);
         }
     }
 }

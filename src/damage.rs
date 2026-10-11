@@ -141,6 +141,21 @@ pub struct Damage {
     pub source: Option<Entity>,
 }
 
+impl std::ops::MulAssign<f32> for Damage {
+    fn mul_assign(&mut self, rhs: f32) {
+        self.value *= rhs;
+    }
+}
+
+impl std::ops::Mul<f32> for Damage {
+    type Output = Self;
+
+    fn mul(mut self, rhs: f32) -> Self::Output {
+        self *= rhs;
+        self
+    }
+}
+
 /// Health. Is there anything more I can say?
 ///
 /// Can't fall below zero.
