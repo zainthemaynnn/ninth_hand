@@ -5,7 +5,7 @@ use bevy_asset_loader::prelude::*;
 use bevy_tweening::{
     PlaybackDirection, PlaybackState, Tween, TweenAnim, Tweenable, lens::UiPositionLens,
 };
-use rand::seq::{IteratorRandom, SliceRandom};
+use rand::seq::IteratorRandom;
 
 use crate::{
     actions::tags::FrontTarget,

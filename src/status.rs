@@ -44,6 +44,15 @@ pub struct Stacks<S: Status> {
     pub phantom_data: PhantomData<S>,
 }
 
+impl<S: Status> Stacks<S> {
+    pub fn new(value: usize) -> Self {
+        Self {
+            value,
+            phantom_data: PhantomData::default(),
+        }
+    }
+}
+
 impl<S: Status> Default for Stacks<S> {
     fn default() -> Self {
         Self {
@@ -58,12 +67,16 @@ impl<S: Status> Stacks<S> {
         self.value
     }
 
+    pub fn add(&mut self, amount: usize) {
+        self.value += amount;
+    }
+
     pub fn consume(&mut self, amount: usize) {
         self.value = std::cmp::max(self.value - amount, 0);
     }
 }
 
-pub trait Status: Component {
+pub trait Status: Send + Sync + 'static {
     fn color() -> Color;
 }
 
@@ -75,8 +88,6 @@ macro_rules! create_dot_effect {
     ($name:ident, $damage_ty:expr) => {
         /// DOT status effect with
         #[doc = stringify!($damage_ty)]
-        #[derive(Component)]
-        #[require(Stacks<$name>)]
         pub struct $name;
 
         impl Status for $name {
@@ -122,14 +133,12 @@ pub fn remove_expired_effects<S: Status>(
 ) {
     for (e_effect, stacks) in effect_query {
         if stacks.value() == 0 {
-            commands.entity(e_effect).remove::<(S, Stacks<S>)>();
+            commands.entity(e_effect).remove::<Stacks<S>>();
         }
     }
 }
 
 /// Doubles the next instance of damage.
-#[derive(Component)]
-#[require(Stacks<Mark>)]
 pub struct Mark;
 
 impl Status for Mark {
@@ -151,8 +160,6 @@ pub fn apply_marks(
 }
 
 /// The unit draws less actions, equal to stacks. Consumed for each draw prevented.
-#[derive(Component)]
-#[require(Stacks<Daze>)]
 pub struct Daze;
 
 impl Status for Daze {

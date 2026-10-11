@@ -3,10 +3,9 @@ use std::time::Duration;
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_tweening::{PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
-use rand::seq::IteratorRandom;
 
 use crate::{
-    actions::{AvailableAction, DrawCount, DrawEvent, OwnsAction, draw_actions},
+    actions::{AvailableAction, DrawCount, DrawEvent, draw_actions},
     asset::{GameState, UiRightLens},
     systems::countdown_to_state,
     ui::UiRumble,

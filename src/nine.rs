@@ -4,6 +4,7 @@ use crate::{
     actions::{Action, CardArt, InPlay, Target, tags::*},
     damage::{Damage, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
     field::OccupiedByUnit,
+    status::{Mark, Stacks},
     turn::Player,
     unit::{Unit, UnitDesc},
 };
@@ -81,7 +82,7 @@ impl Crush {
 
 #[derive(Component)]
 #[require(
-    Action { name: "Slap", description: "Damage 1 front 3x" },
+    Action { name: "Slap", description: "Damage 1 front, move to adjacent tile" },
     Damage,
     FrontTarget,
     SingleTarget,
@@ -109,8 +110,24 @@ impl Slap {
 pub struct Gaze;
 
 impl Gaze {
-    fn _play() {
-        todo!();
+    fn _play(
+        trigger: On<Add, InPlay>,
+        mut commands: Commands,
+        action_query: Query<(), With<Gaze>>,
+        target_query: Query<&OccupiedByUnit, With<Target>>,
+        _unit_query: Query<Entity, With<Nine>>,
+    ) {
+        if !action_query.contains(trigger.entity) {
+            return;
+        }
+
+        let occupied_by = target_query.single().unwrap();
+        let e_target = occupied_by.iter().next().unwrap();
+        commands
+            .entity(e_target)
+            .entry::<Stacks<Mark>>()
+            .or_default()
+            .and_modify(|mut stacks| stacks.add(1));
     }
 }
 
