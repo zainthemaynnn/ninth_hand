@@ -267,13 +267,18 @@ pub fn remove_all_available_actions(
     }
 }
 
+#[derive(Component)]
+pub struct DrawCount {
+    pub amount: usize,
+}
+
 pub fn shuffle_unit_actions<T: Team>(
     mut commands: Commands,
-    collection_query: Query<&OwnsAction, With<T>>,
+    collection_query: Query<(&OwnsAction, &DrawCount), With<T>>,
 ) {
     let mut rng = rand::rng();
-    for owns_action in collection_query {
-        let selected_actions = owns_action.iter().sample(&mut rng, 3);
+    for (owns_action, draw_count) in collection_query {
+        let selected_actions = owns_action.iter().sample(&mut rng, draw_count.amount);
 
         for e_action in selected_actions {
             commands.entity(e_action).insert(AvailableAction);
