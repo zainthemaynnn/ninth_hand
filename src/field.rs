@@ -21,9 +21,20 @@ impl Plugin for FieldPlugin {
             .init_resource::<HighlighterMaterials>()
             .init_resource::<Field<Player>>()
             .init_resource::<Field<Cpu>>()
+            .add_message::<MovementEvent>()
             .add_systems(
                 OnEnter(GameState::AssetLoading),
                 animate_highlighter_materials,
+            )
+            .add_systems(
+                Update,
+                (
+                    run_movement_events,
+                    tick_movement_stacks::<Player>,
+                    tick_movement_stacks::<Cpu>,
+                )
+                    .chain()
+                    .run_if(in_state(GameState::InGame)),
             )
             .add_observer(toggle_insert_on_click::<SelectedCell, With<FieldCell>>)
             .add_observer(insert_on_hover::<HoveredCell, With<FieldCell>>)
@@ -151,10 +162,18 @@ pub enum Highlighter {
     Red,
     Blue,
     Green,
+    Yellow,
 }
 
 impl Highlighter {
-    pub const VALUES: [Self; 5] = [Self::White, Self::Gray, Self::Red, Self::Blue, Self::Green];
+    pub const VALUES: [Self; 6] = [
+        Self::White,
+        Self::Gray,
+        Self::Red,
+        Self::Blue,
+        Self::Green,
+        Self::Yellow,
+    ];
 }
 
 impl From<Highlighter> for LinearRgba {
@@ -165,6 +184,7 @@ impl From<Highlighter> for LinearRgba {
             Highlighter::Red => LinearRgba::RED,
             Highlighter::Blue => LinearRgba::BLUE,
             Highlighter::Green => LinearRgba::GREEN,
+            Highlighter::Yellow => LinearRgba::RED + LinearRgba::GREEN,
         }
     }
 }
@@ -218,9 +238,13 @@ impl<T: Team> Field<T> {
         self.cells.insert(position, e_cell);
     }
 
-    pub fn adjacent(&self, position: HexCoord) -> Vec<Entity> {
+    pub fn adjacent(&self, position: HexCoord, direction: HexCoord) -> Option<Entity> {
+        self.cells.get(&(position + direction)).copied()
+    }
+
+    pub fn all_adjacent(&self, position: HexCoord, directions: Vec<HexCoord>) -> Vec<Entity> {
         let mut adj = Vec::new();
-        for direction in HexCoord::DIRECTIONS {
+        for direction in directions {
             if let Some(e_cell) = self.cells.get(&(position + direction)) {
                 adj.push(*e_cell);
             }
@@ -274,7 +298,7 @@ pub fn load_field<T: Team>(
     info!("loaded hex cells {:?}", &coords);
 }
 
-fn animate_highlighter_materials(mut commands: Commands, materials: Res<HighlighterMaterials>) {
+pub fn animate_highlighter_materials(mut commands: Commands, materials: Res<HighlighterMaterials>) {
     for (v, material) in materials.0.iter() {
         let selection_tween = Tween::new(
             EaseFunction::SineInOut,
@@ -293,7 +317,7 @@ fn animate_highlighter_materials(mut commands: Commands, materials: Res<Highligh
     }
 }
 
-fn animate_highlighted_cell(
+pub fn animate_highlighted_cell(
     trigger: On<Add, HighlightedCell>,
     mut commands: Commands,
     materials: Res<HighlighterMaterials>,
@@ -306,14 +330,100 @@ fn animate_highlighted_cell(
     ));
 }
 
-fn deanimate_dehighlighted_cell(trigger: On<Remove, HighlightedCell>, mut commands: Commands) {
+pub fn deanimate_dehighlighted_cell(trigger: On<Remove, HighlightedCell>, mut commands: Commands) {
     commands
         .entity(trigger.entity)
         .insert(MeshMaterial3d::<StandardMaterial>::default());
 }
 
-fn dehighlight_deselected_cell(trigger: On<Remove, SelectedCell>, mut commands: Commands) {
+pub fn dehighlight_deselected_cell(trigger: On<Remove, SelectedCell>, mut commands: Commands) {
     commands.entity(trigger.entity).remove::<HighlightedCell>();
+}
+
+#[derive(Message)]
+pub struct MovementEvent {
+    pub direction: HexCoord,
+    pub target: Entity,
+}
+
+#[derive(Component)]
+pub struct MovementStack {
+    pub steps: Vec<HexCoord>,
+    pub cooldown: Timer,
+}
+
+impl Default for MovementStack {
+    fn default() -> Self {
+        Self {
+            steps: Vec::default(),
+            cooldown: Timer::new(Duration::from_millis(500), TimerMode::Repeating),
+        }
+    }
+}
+
+pub fn run_movement_events(
+    mut unit_query: Query<&mut MovementStack>,
+    mut movement_events: MessageReader<MovementEvent>,
+) {
+    for MovementEvent {
+        direction,
+        target: e_unit,
+    } in movement_events.read()
+    {
+        let mut movement_stack = unit_query.get_mut(*e_unit).unwrap();
+        movement_stack.steps.push(*direction);
+        movement_stack.cooldown.unpause();
+    }
+}
+
+pub fn tick_movement_stacks<T: Team>(
+    mut commands: Commands,
+    field: Res<Field<T>>,
+    time: Res<Time>,
+    // so apparently you're not even allowed to mutate these things -- fine
+    unit_query: Query<(Entity, &OccupyingCell)>,
+    cell_query: Query<&HexCoord>,
+    mut movement_stack_query: Query<&mut MovementStack>,
+    occupied_by_query: Query<&OccupiedByUnit>,
+) {
+    for (e_unit, OccupyingCell(e_cell)) in unit_query {
+        let mut movement_stack = movement_stack_query.get_mut(e_unit).unwrap();
+
+        // update movement only if timer is finished
+        if !movement_stack.cooldown.tick(time.delta()).just_finished() {
+            continue;
+        }
+
+        // move to adjacent cell
+        let coord = cell_query.get(*e_cell).unwrap();
+        let direction = movement_stack.steps.remove(0);
+        let Some(e_adj_cell) = field.adjacent(*coord, direction) else {
+            warn!("attempted illegal move to {:?} + {:?}", coord, direction);
+            continue;
+        };
+        commands.entity(e_unit).insert(OccupyingCell(e_adj_cell));
+
+        // swap adjacent unit
+        // TODO: I considered not swapping the unit if it's also going to move
+        // (i.e. everything in a row is moving in the same direction at once)
+        // the corpse of this implementation is below.
+        // however this causes issues if two enemies get pushed into a third
+        // stationary one -- where does it go? for now I should design it
+        // so that a unit never moves into another moving unit.
+
+        if let Ok(adj_occupied_by) = occupied_by_query.get(e_adj_cell) {
+            let e_adj_unit = adj_occupied_by.iter().next().unwrap();
+            // let adj_movement_stack = movement_stack_query.get(e_adj_unit).unwrap();
+            // if adj_movement_stack.steps.is_empty() {
+            //     commands.entity(e_adj_unit).insert(OccupyingCell(*e_cell));
+            // }
+            commands.entity(e_adj_unit).insert(OccupyingCell(*e_cell));
+        }
+
+        if movement_stack.steps.is_empty() {
+            movement_stack.cooldown.pause();
+        }
+    }
 }
 
 #[cfg(test)]
@@ -342,9 +452,29 @@ pub mod tests {
         }
 
         let field = app.world_mut().resource::<Field<Player>>();
-        assert!(field.adjacent(coords[0]).len() == 2);
-        assert!(field.adjacent(coords[1]).len() == 2);
-        assert!(field.adjacent(coords[2]).len() == 2);
-        assert!(field.adjacent(coords[3]).len() == 0);
+        assert!(
+            field
+                .all_adjacent(coords[0], HexCoord::DIRECTIONS.to_vec())
+                .len()
+                == 2
+        );
+        assert!(
+            field
+                .all_adjacent(coords[1], HexCoord::DIRECTIONS.to_vec())
+                .len()
+                == 2
+        );
+        assert!(
+            field
+                .all_adjacent(coords[2], HexCoord::DIRECTIONS.to_vec())
+                .len()
+                == 2
+        );
+        assert!(
+            field
+                .all_adjacent(coords[3], HexCoord::DIRECTIONS.to_vec())
+                .len()
+                == 0
+        );
     }
 }

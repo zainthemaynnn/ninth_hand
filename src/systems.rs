@@ -74,3 +74,9 @@ pub fn countdown_to_state<const T: u64, S: FreelyMutableState>(
         next_state.set(state);
     }
 }
+
+pub fn clear_all<T: Component>(mut commands: Commands, t_query: Query<Entity, With<T>>) {
+    for e_t in t_query {
+        commands.entity(e_t).remove::<T>();
+    }
+}

@@ -1,9 +1,9 @@
 use bevy::{platform::collections::HashMap, prelude::*};
 
 use crate::{
-    actions::{Action, CardArt, InPlay, Target, tags::*},
-    damage::{Damage, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
-    field::OccupiedByUnit,
+    actions::{Action, CardArt, InPlay, SecondaryTarget, Target, tags::*},
+    damage::{Damage, DamageBuffer, DamageEvent, DamageVariant, Health, HealthCap, Resist},
+    field::{HexCoord, MovementEvent, OccupiedByUnit},
     status::{Mark, Stacks},
     turn::Player,
     unit::{Unit, UnitDesc},
@@ -13,7 +13,9 @@ pub struct NinePlugin;
 
 impl Plugin for NinePlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(Crush::_play);
+        app.add_observer(Crush::_play)
+            .add_observer(Slap::_play)
+            .add_observer(Gaze::_play);
     }
 }
 
@@ -82,7 +84,7 @@ impl Crush {
 
 #[derive(Component)]
 #[require(
-    Action { name: "Slap", description: "Damage 1 front, move to adjacent tile" },
+    Action { name: "Slap", description: "Damage 2 front, move to adjacent tile" },
     Damage,
     FrontTarget,
     SingleTarget,
@@ -93,8 +95,43 @@ impl Crush {
 pub struct Slap;
 
 impl Slap {
-    fn _play() {
-        todo!();
+    fn _play(
+        trigger: On<Add, InPlay>,
+        unit_query: Query<Entity, With<Nine>>,
+        action_query: Query<(), With<Slap>>,
+        target_query: Query<(Entity, &OccupiedByUnit), With<Target>>,
+        secondary_target_query: Query<Entity, With<SecondaryTarget>>,
+        coord_query: Query<&HexCoord>,
+        mut damage_events: MessageWriter<DamageEvent>,
+        mut move_events: MessageWriter<MovementEvent>,
+    ) {
+        if !action_query.contains(trigger.entity) {
+            return;
+        }
+
+        // man, all this querying is convoluted
+        // perhaps there is an easier way to apply movement
+        let e_unit = unit_query.single().unwrap();
+        let (e_enemy_cell, occupied_by) = target_query.single().unwrap();
+        let e_enemy = occupied_by.iter().next().unwrap();
+        let e_knock_cell = secondary_target_query.single().unwrap();
+
+        let attack_src = coord_query.get(e_enemy_cell).unwrap();
+        let attack_dst = coord_query.get(e_knock_cell).unwrap();
+
+        damage_events.write(DamageEvent {
+            damage: Damage {
+                ty: DamageVariant::Bash,
+                value: 2.0,
+                source: Some(e_unit),
+            },
+            target: e_enemy,
+        });
+
+        move_events.write(MovementEvent {
+            direction: HexCoord::new(attack_dst.q - attack_src.q, attack_dst.r - attack_src.r),
+            target: e_enemy,
+        });
     }
 }
 

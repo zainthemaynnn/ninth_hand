@@ -8,10 +8,10 @@ use bevy_tweening::{
 use rand::seq::IteratorRandom;
 
 use crate::{
-    actions::tags::FrontTarget,
+    actions::tags::{FrontTarget, HasSecondaryTarget},
     asset::GameState,
-    field::{HexCoord, HighlightedCell, Highlighter, OccupyingCell},
-    turn::Rival,
+    field::{Field, HexCoord, HighlightedCell, Highlighter, OccupyingCell},
+    turn::{Player, Rival},
     unit::Unit,
 };
 
@@ -25,7 +25,11 @@ impl Plugin for ActionPlugin {
             .add_systems(OnEnter(GameState::InGame), set_action_bar)
             .add_systems(
                 Update,
-                (update_action_bar, select_deselect_card).run_if(in_state(GameState::InGame)),
+                (
+                    update_action_bar,
+                    select_deselect_card,
+                )
+                    .run_if(in_state(GameState::InGame)),
             )
             .add_observer(select_card_animation)
             .add_observer(deselect_card_animation)
@@ -34,7 +38,10 @@ impl Plugin for ActionPlugin {
             .add_observer(deselect_action_cells_on_deselect)
             .add_observer(highlight_action_owner_cell)
             .add_observer(highlight_front_target_cells)
-            .add_observer(activate_action_on_target_click)
+            .add_observer(add_target_on_click)
+            .add_observer(play_primary_target_action)
+            .add_observer(highlight_secondary_targets)
+            .add_observer(play_secondary_target_action)
             .configure_loading_state(
                 LoadingStateConfig::new(GameState::AssetLoading).load_collection::<CardAssets>(),
             );
@@ -142,6 +149,13 @@ pub mod tags {
 
     #[derive(Component, Default)]
     pub struct Glyph;
+
+    #[derive(Component, Default)]
+    pub struct HasSecondaryTarget;
+
+    #[derive(Component, Default)]
+    #[require(HasSecondaryTarget)]
+    pub struct AdjacentSecondaryTarget;
 }
 
 #[derive(Component)]
@@ -194,7 +208,16 @@ pub struct Targettable;
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
+#[require(HighlightedCell { ty: Highlighter::Yellow })]
+pub struct SecondTargettable;
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
 pub struct Target;
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+pub struct SecondaryTarget;
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
@@ -286,7 +309,7 @@ pub fn update_action_bar(
     }
 }
 
-fn select_deselect_card(
+pub fn select_deselect_card(
     mut commands: Commands,
     interaction_query: Query<
         (Entity, &Interaction, Option<&SelectedCard>),
@@ -307,7 +330,7 @@ fn select_deselect_card(
     }
 }
 
-fn select_card_animation(
+pub fn select_card_animation(
     trigger: On<Add, SelectedCard>,
     mut commands: Commands,
     selected_query: Query<Entity, With<SelectedCard>>,
@@ -338,7 +361,7 @@ fn select_card_animation(
     }
 }
 
-fn deselect_card_animation(
+pub fn deselect_card_animation(
     trigger: On<Remove, SelectedCard>,
     mut anim_query: Query<&mut TweenAnim>,
 ) {
@@ -359,7 +382,7 @@ fn deselect_card_animation(
     tween_anim.playback_state = PlaybackState::Playing;
 }
 
-fn select_action_on_card_select(
+pub fn select_action_on_card_select(
     trigger: On<Add, SelectedCard>,
     mut commands: Commands,
     card_query: Query<&OwnedByAction>,
@@ -368,7 +391,7 @@ fn select_action_on_card_select(
     commands.entity(*e_action).insert(SelectedAction);
 }
 
-fn deselect_action_on_card_deselect(
+pub fn deselect_action_on_card_deselect(
     trigger: On<Remove, SelectedCard>,
     mut commands: Commands,
     card_query: Query<&OwnedByAction>,
@@ -377,7 +400,7 @@ fn deselect_action_on_card_deselect(
     commands.entity(*e_action).remove::<SelectedAction>();
 }
 
-fn highlight_action_owner_cell(
+pub fn highlight_action_owner_cell(
     trigger: On<Add, SelectedAction>,
     mut commands: Commands,
     action_query: Query<&OwnedByUnit>,
@@ -399,7 +422,7 @@ fn highlight_action_owner_cell(
     info!("highlighted selected action owner");
 }
 
-fn deselect_action_cells_on_deselect(
+pub fn deselect_action_cells_on_deselect(
     _trigger: On<Remove, SelectedAction>,
     mut commands: Commands,
     highlighted_query: Query<Entity, With<HighlightedCell>>,
@@ -411,7 +434,7 @@ fn deselect_action_cells_on_deselect(
     }
 }
 
-fn highlight_front_target_cells(
+pub fn highlight_front_target_cells(
     trigger: On<Add, SelectedAction>,
     mut commands: Commands,
     target_query: Query<(), With<FrontTarget>>,
@@ -442,20 +465,62 @@ fn highlight_front_target_cells(
     }
 }
 
-fn activate_action_on_target_click(
+pub fn add_target_on_click(
     trigger: On<Pointer<Click>>,
     mut commands: Commands,
     target_query: Query<(), With<Targettable>>,
-    action_query: Query<Entity, With<SelectedAction>>,
 ) {
     let Ok(()) = target_query.get(trigger.entity) else {
         return;
     };
 
-    let e_action = action_query.single().unwrap();
+    commands.entity(trigger.entity).insert(Target);
+}
+
+pub fn play_primary_target_action(
+    _trigger: On<Add, Target>,
+    mut commands: Commands,
+    action_query: Query<Entity, (With<SelectedAction>, Without<HasSecondaryTarget>)>,
+) {
+    let Ok(e_action) = action_query.single() else {
+        return;
+    };
+
     commands
         .entity(e_action)
         .insert(InPlay)
         .remove::<SelectedAction>();
-    commands.entity(trigger.entity).insert(Target);
+}
+
+pub fn highlight_secondary_targets(
+    trigger: On<Add, Target>,
+    mut commands: Commands,
+    field: Res<Field<Player>>,
+    target_query: Query<&HexCoord>,
+    action_query: Query<(), (With<SelectedAction>, With<HasSecondaryTarget>)>,
+) {
+    let Ok(()) = action_query.single() else {
+        return;
+    };
+
+    let coord = target_query.get(trigger.entity).unwrap();
+
+    for e_adj in field.all_adjacent(*coord, HexCoord::DIRECTIONS.to_vec()) {
+        commands.entity(e_adj).insert(SecondTargettable);
+    }
+}
+
+pub fn play_secondary_target_action(
+    _trigger: On<Add, SecondaryTarget>,
+    mut commands: Commands,
+    action_query: Query<Entity, (With<SelectedAction>, With<HasSecondaryTarget>)>,
+) {
+    let Ok(e_action) = action_query.single() else {
+        return;
+    };
+
+    commands
+        .entity(e_action)
+        .insert(InPlay)
+        .remove::<SelectedAction>();
 }
