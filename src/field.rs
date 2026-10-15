@@ -351,9 +351,11 @@ pub struct MovementStack {
 
 impl Default for MovementStack {
     fn default() -> Self {
+        let mut cooldown = Timer::new(Duration::from_millis(500), TimerMode::Repeating);
+        cooldown.pause();
         Self {
             steps: Vec::default(),
-            cooldown: Timer::new(Duration::from_millis(500), TimerMode::Repeating),
+            cooldown,
         }
     }
 }
@@ -393,7 +395,11 @@ pub fn tick_movement_stacks<T: Team>(
 
         // move to adjacent cell
         let coord = cell_query.get(*e_cell).unwrap();
-        let direction = movement_stack.steps.remove(0);
+        let Some(direction) = movement_stack.steps.try_remove(0) else {
+            warn!("attempted to get move direction from empty stack; pausing");
+            movement_stack.cooldown.pause();
+            continue;
+        };
         let Some(e_adj_cell) = field.adjacent(*coord, direction) else {
             warn!("attempted illegal move to {:?} + {:?}", coord, direction);
             continue;

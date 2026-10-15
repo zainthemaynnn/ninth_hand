@@ -4,7 +4,7 @@ use crate::{
     actions::DrawCount,
     asset::GameState,
     damage::{DamageAssets, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
-    field::{Field, HexCoord, HoveredCell, OccupiedByUnit, OccupyingCell},
+    field::{Field, HexCoord, HoveredCell, MovementStack, OccupiedByUnit, OccupyingCell},
     systems::enforce_one,
     turn::{Cpu, Player, Team},
 };
@@ -32,6 +32,7 @@ impl Plugin for UnitPlugin {
     DamageBuffer,
     Transform,
     DrawCount { amount: 3 },
+    MovementStack,
     OccupyingCell(Entity::PLACEHOLDER)
 )]
 pub struct Unit;
