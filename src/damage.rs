@@ -14,7 +14,7 @@ impl Plugin for DamagePlugin {
         .add_systems(
             Update,
             (
-                (apply_damage_events, apply_resist, apply_damage_buffers, die).chain(),
+                (apply_damage_events, apply_resist, apply_damage_buffers).chain(),
                 show_damage_events,
             )
                 .run_if(in_state(GameState::InGame)),
@@ -201,20 +201,29 @@ pub fn apply_resist(mut query: Query<(&mut DamageBuffer, &Resist)>) {
 }
 
 /// Applies damage values from `DamageBuffer`.
-pub fn apply_damage_buffers(mut query: Query<(&mut Health, &mut DamageBuffer), Without<Dead>>) {
-    for (mut health, mut damage_buf) in query.iter_mut() {
+pub fn apply_damage_buffers(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Health, &mut DamageBuffer), Without<Dead>>,
+) {
+    for (e_health, mut health, mut damage_buf) in query.iter_mut() {
         for damage in damage_buf.0.drain(0..) {
             health.0 = (health.0 - damage.value).max(0.0);
             info!("health: {}", health.0);
-        }
-    }
-}
 
-/// Inserts `Dead` component.
-pub fn die(mut commands: Commands, health_query: Query<(Entity, &Health)>) {
-    for (entity, health) in health_query.iter() {
-        if health.0 == 0.0 {
-            commands.entity(entity).insert(Dead);
+            if health.0 == 0.0 {
+                commands.entity(e_health).insert(Dead {
+                    killed_by: damage.source,
+                });
+
+                if let Some(e_killer) = damage.source {
+                    commands.trigger(KilledSomething {
+                        entity: e_killer,
+                        killed: e_health,
+                    });
+                }
+
+                return;
+            }
         }
     }
 }
@@ -222,4 +231,12 @@ pub fn die(mut commands: Commands, health_query: Query<(Entity, &Health)>) {
 /// PCs and NPCs with this are dead.
 #[derive(Component, Default)]
 #[component(storage = "SparseSet")]
-pub struct Dead;
+pub struct Dead {
+    pub killed_by: Option<Entity>,
+}
+
+#[derive(EntityEvent)]
+pub struct KilledSomething {
+    pub entity: Entity,
+    pub killed: Entity,
+}
