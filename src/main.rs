@@ -9,13 +9,13 @@ use bevy::{
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::ActionPlugin,
+    actions::{ActionPlugin, AvailableAction, OwnedByUnit},
     asset::{GameState, NineAssetPlugin},
     damage::{DamagePlugin, Health},
     director::DirectorPlugin,
     enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
     field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
-    nine::NinePlugin,
+    nine::{Nine, NinePlugin},
     status::StatusPlugin,
     symmetra::SymmetraPlugin,
     turn::{Cpu, Player, TurnPlugin},
@@ -136,6 +136,7 @@ fn entry(
     _player_field: Res<Field<Player>>,
     cpu_field: Res<Field<Cpu>>,
     _tf_query: Query<&GlobalTransform>,
+    nine_query: Query<Entity, With<Nine>>,
 ) {
     commands.spawn((
         PointLight {
@@ -180,4 +181,9 @@ fn entry(
 
     dbg!(HexCoord::new(1, -1).row());
     dbg!(HexCoord::new(0, -3).row());
+
+    let e_nine = nine_query.single().unwrap();
+
+    commands.spawn((crate::nine::Crush, AvailableAction, OwnedByUnit(e_nine)));
+    commands.spawn((crate::nine::Slap, AvailableAction, OwnedByUnit(e_nine)));
 }

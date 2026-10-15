@@ -78,3 +78,7 @@ pub fn clear_all<T: Component>(mut commands: Commands, t_query: Query<Entity, Wi
         commands.entity(e_t).remove::<T>();
     }
 }
+
+pub fn log_added_component<T: Component>(trigger: On<Add, T>, mut commands: Commands) {
+    commands.entity(trigger.entity).log_components();
+}

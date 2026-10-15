@@ -21,6 +21,7 @@ impl Plugin for NinePlugin {
         app.add_observer(Crush::_play)
             .add_observer(Slap::_play)
             .add_observer(Gaze::_play)
+            .add_observer(crate::systems::log_added_component::<AnimationPlayer>)
             .configure_loading_state(
                 LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
             );
@@ -33,11 +34,11 @@ pub struct NineAssets {
     pub nine: Handle<WorldAsset>,
     #[asset(path = "gltf/hand.glb#Scene0")]
     pub hand: Handle<WorldAsset>,
-    #[asset(path = "gltf/nine.glb#Animation1")]
+    #[asset(path = "gltf/hand.glb#Animation1")]
     pub hand_float: Handle<AnimationClip>,
-    #[asset(path = "gltf/nine.glb#Animation2")]
+    #[asset(path = "gltf/hand.glb#Animation2")]
     pub hand_roll: Handle<AnimationClip>,
-    #[asset(path = "gltf/nine.glb#Animation0")]
+    #[asset(path = "gltf/hand.glb#Animation0")]
     pub hand_fist: Handle<AnimationClip>,
 }
 
@@ -147,29 +148,31 @@ impl Crush {
         mut commands: Commands,
         _assets: Res<NineAssets>,
         _animation_graphs: ResMut<Assets<AnimationGraph>>,
+        children: Query<&Children>,
         crush_query: Query<(), With<Crush>>,
         target_query: Query<(Entity, &GlobalTransform, &OccupiedByUnit), With<Target>>,
         mut enemy_query: Query<&mut DamageBuffer>,
         unit_query: Query<(Entity, &OwnsHand), With<Nine>>,
-        mut hand_query: Query<(
-            Entity,
-            &Hand,
-            &mut Transform,
-            &mut AnimationPlayer,
-            &mut AnimationTransitions,
-            &HandAnimationGraph,
-        )>,
+        mut hand_query: Query<(Entity, &Hand, &mut Transform, &HandAnimationGraph)>,
+        mut animator_query: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
     ) {
-        info!("playing card");
         if !crush_query.contains(trigger.entity) {
             return;
         }
-        info!("playing crush");
 
         let (_e_cell, target_tf, occupied_by) = target_query.single().unwrap();
         let (e_unit, owns_hand) = unit_query.single().unwrap();
-        let (e_hand, hand, hand_tf, mut animator, mut transitions, graph) =
-            hand_query.get_mut(owns_hand.0).unwrap();
+        let (e_hand, hand, hand_tf, graph) = hand_query.get_mut(owns_hand.0).unwrap();
+
+        let Some(e_animator) = children
+            .iter_descendants(e_hand)
+            .find(|&e_child| animator_query.contains(e_child))
+        else {
+            warn!("failed to locate animator");
+            return;
+        };
+
+        let (mut animator, mut transitions) = animator_query.get_mut(e_animator).unwrap();
 
         let mut damage_buffer = enemy_query.get_mut(occupied_by.get()).unwrap();
         damage_buffer.0.push(crate::damage::Damage {
