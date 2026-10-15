@@ -1,15 +1,43 @@
+use std::time::Duration;
+
 use bevy::{ecs::system::IntoObserverSystem, platform::collections::HashMap, prelude::*};
+use bevy_asset_loader::prelude::*;
+use bevy_tweening::{
+    AnimCompletedEvent, AnimTarget, Delay, Tween, TweenAnim, lens::TransformPositionLens,
+};
 
 use crate::{
-    actions::{Action, ActionHandler, CardArt, InPlay, Target, tags::*}, damage::{Damage, DamageBuffer, DamageVariant, Health, HealthCap, Resist}, field::{Field, OccupiedByUnit}, turn::{Ally, Cpu, Player, Rival, TurnState}, unit::{Unit, UnitDesc},
+    actions::{Action, CardArt, InPlay, Target, tags::*},
+    asset::GameState,
+    damage::{Damage, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
+    field::{Field, OccupiedByUnit},
+    turn::{Ally, Cpu, Player, Rival, TurnState},
+    unit::{Unit, UnitDesc},
 };
 
 pub struct NinePlugin;
 
 impl Plugin for NinePlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(Crush::play);
+        app.configure_loading_state(
+            LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
+        )
+        .add_observer(Crush::play);
     }
+}
+
+#[derive(AssetCollection, Resource)]
+pub struct NineAssets {
+    #[asset(path = "gltf/nine.glb#Scene0")]
+    pub nine: Handle<WorldAsset>,
+    #[asset(path = "gltf/hand.glb#Scene0")]
+    pub hand: Handle<WorldAsset>,
+    #[asset(path = "gltf/nine.glb#Animation1")]
+    pub hand_float: Handle<AnimationClip>,
+    #[asset(path = "gltf/nine.glb#Animation2")]
+    pub hand_roll: Handle<AnimationClip>,
+    #[asset(path = "gltf/nine.glb#Animation0")]
+    pub hand_fist: Handle<AnimationClip>,
 }
 
 #[derive(Component)]
@@ -19,7 +47,7 @@ impl Plugin for NinePlugin {
     UnitDesc {
         name: "Nine",
         passive: "When killing an enemy, gets an additional action.",
-        flavor: "MWAHAHAHAHA",
+        flavor: "MUAHAHAHAHA",
     },
     Health(10.0),
     HealthCap(10.0),
@@ -30,13 +58,48 @@ impl Plugin for NinePlugin {
 )]
 pub struct Nine;
 
-#[derive(Component, Debug)]
-#[relationship(relationship_target = HandOwnedBy)]
-pub struct OwnsHand(pub Entity);
+#[derive(Component)]
+pub struct Hand {
+    pub rest_position: Transform,
+}
 
 #[derive(Component, Debug)]
-#[relationship_target(relationship = OwnsHand)]
-pub struct HandOwnedBy(Entity);
+#[relationship(relationship_target = OwnsHand)]
+pub struct HandOwnedBy(pub Entity);
+
+#[derive(Component, Debug)]
+#[relationship_target(relationship = HandOwnedBy)]
+pub struct OwnsHand(Entity);
+
+#[derive(Component)]
+pub struct HandAnimationGraph {
+    pub graph_handle: Handle<AnimationGraph>,
+    pub idle: AnimationNodeIndex,
+    pub fist: AnimationNodeIndex,
+}
+
+pub fn spawn_with_hand(
+    In(e_nine): In<Entity>,
+    mut commands: Commands,
+    assets: Res<NineAssets>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+) {
+    let mut graph = AnimationGraph::new();
+    let idle = graph.add_clip(assets.hand_float.clone(), 1.0, graph.root);
+    let fist = graph.add_clip(assets.hand_fist.clone(), 1.0, graph.root);
+    commands.spawn((
+        Hand {
+            rest_position: Transform::default(),
+        },
+        WorldAssetRoot(assets.hand.clone()),
+        HandOwnedBy(e_nine),
+        HandAnimationGraph {
+            graph_handle: graphs.add(graph),
+            idle,
+            fist,
+        },
+    ));
+}
 
 #[derive(Component)]
 #[require(
@@ -52,25 +115,72 @@ pub struct Crush;
 impl Crush {
     fn play(
         trigger: On<Add, InPlay>,
+        mut commands: Commands,
+        assets: Res<NineAssets>,
+        mut animation_graphs: ResMut<Assets<AnimationGraph>>,
         crush_query: Query<(), With<Crush>>,
-        target_query: Query<(Entity, &OccupiedByUnit), With<Target>>,
+        target_query: Query<(Entity, &GlobalTransform, &OccupiedByUnit), With<Target>>,
         mut enemy_query: Query<&mut DamageBuffer>,
         unit_query: Query<(Entity, &OwnsHand), With<Nine>>,
-        mut hand_query: Query<(&mut Transform,)>,
+        mut hand_query: Query<(
+            Entity,
+            &Hand,
+            &mut Transform,
+            &mut AnimationPlayer,
+            &mut AnimationTransitions,
+            &HandAnimationGraph,
+        )>,
     ) {
         if !crush_query.contains(trigger.entity) {
             return;
         }
 
-        let (e_cell, OccupiedByUnit(&e_target)) = target_query.single().unwrap();
+        let (e_cell, target_tf, occupied_by) = target_query.single().unwrap();
         let (e_unit, owns_hand) = unit_query.single().unwrap();
+        let (e_hand, hand, mut hand_tf, mut animator, mut transitions, graph) =
+            hand_query.get_mut(owns_hand.0).unwrap();
 
-        let mut damage_buffer = enemy_query.get_mut(e_target).unwrap();
+        let mut damage_buffer = enemy_query.get_mut(occupied_by.get()).unwrap();
         damage_buffer.0.push(crate::damage::Damage {
             ty: DamageVariant::Bash,
             value: 5f32,
             source: Some(e_unit),
         });
+
+        let tween = Tween::new(
+            EaseFunction::QuadraticOut,
+            Duration::from_secs(2),
+            TransformPositionLens {
+                start: hand_tf.translation,
+                end: target_tf.translation() + Vec3::Y * 8.0,
+            },
+        )
+        .then(Delay::new(Duration::from_millis(500)))
+        .then(Tween::new(
+            EaseFunction::CubicOut,
+            Duration::from_millis(200),
+            TransformPositionLens {
+                start: target_tf.translation() + Vec3::Y * 8.0,
+                end: target_tf.translation(),
+            },
+        ))
+        .then(Delay::new(Duration::from_millis(500)))
+        .then(Tween::new(
+            EaseFunction::QuadraticOut,
+            Duration::from_secs(2),
+            TransformPositionLens {
+                start: target_tf.translation(),
+                end: hand.rest_position.translation,
+            },
+        ));
+
+        transitions.play(animator.as_mut(), graph.fist, Duration::from_millis(500));
+
+        commands
+            .spawn((TweenAnim::new(tween), AnimTarget::component::<Transform>(e_hand)));
+            // .observe(|trigger: On<AnimCompletedEvent>| {
+            //     transitions.play(animator.as_mut(), graph.idle, Duration::from_millis(500));
+            // });
     }
 }
 

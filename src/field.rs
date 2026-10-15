@@ -113,6 +113,12 @@ pub struct OccupyingCell(pub Entity);
 #[relationship_target(relationship = OccupyingCell)]
 pub struct OccupiedByUnit(Entity);
 
+impl OccupiedByUnit {
+    pub fn get(&self) -> Entity {
+        self.0
+    }
+}
+
 #[derive(Component, Default)]
 #[require(HexCoord, Pickable)]
 pub struct FieldCell;

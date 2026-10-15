@@ -225,7 +225,6 @@ pub fn hide_unit_details(
     trigger: On<Remove, HoveredUnit>,
     mut ui_query: Query<&mut Visibility, With<UnitDetailsWindow>>,
 ) {
-    info!("hide");
     let mut visibility = ui_query.single_mut().unwrap();
     *visibility = Visibility::Hidden;
 }

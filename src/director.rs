@@ -1,9 +1,10 @@
+use bevy::asset::RenderAssetUsages;
 use bevy::math::cubic_splines::{CubicBezier, CubicGenerator};
 use bevy::platform::collections::HashMap;
 use bevy::{
     math::Affine2,
     prelude::*,
-    render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::PrimitiveTopology},
+    render::{mesh::Indices, render_resource::PrimitiveTopology},
 };
 
 use crate::field::{Highlighter, HighlighterMaterials};
@@ -18,19 +19,10 @@ impl Plugin for DirectorPlugin {
     }
 }
 
-fn main() {
-    App::new()
-        .add_plugins(DefaultPlugins)
-        .add_systems(Startup, setup_scene)
-        .add_systems(Update, animate_director_materials)
-        .run();
-}
-
-#[derive(Component, Default)]
+#[derive(Component)]
 #[require(Highlighter)]
 pub struct Director {
     pub curve: CubicCurve<Vec3>,
-    pub speed: f32,
     pub width: f32,
     pub tiling_distance: f32,
 }
@@ -85,8 +77,8 @@ fn animate_director_materials(
     director_materials: Res<DirectorMaterials>,
 ) {
     for h_material in director_materials.0.values() {
-        let material = materials.get_mut(h_material).unwrap();
-        let offset = (time.elapsed_secs() * line.speed) % 1.0;
+        let mut material = materials.get_mut(h_material).unwrap();
+        let offset = time.elapsed_secs() % 1.0;
         material.uv_transform = Affine2::from_translation(Vec2::new(-offset, 0.0));
     }
 }

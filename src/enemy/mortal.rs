@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::{turn::Cpu, unit::{Unit, UnitDesc}};
+use crate::{actions::{Action, tags::*}, turn::Cpu, unit::{Unit, UnitDesc}};
 
 #[derive(Component)]
 #[require(
@@ -13,3 +13,13 @@ use crate::{turn::Cpu, unit::{Unit, UnitDesc}};
     }
 )]
 pub struct Mortal;
+
+#[derive(Component)]
+#[require(
+    Action { name: "Punch", description: "Damage 5 front" },
+    Damage,
+    FrontTarget,
+    SingleTarget,
+    LineOfSight,
+)]
+pub struct Punch;

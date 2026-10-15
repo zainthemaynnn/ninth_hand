@@ -13,6 +13,7 @@ use crate::{
     actions::{ActionPlugin, AvailableAction, OwnedByUnit},
     asset::{GameState, NineAssetPlugin},
     damage::{DamagePlugin, Health},
+    director::DirectorPlugin,
     enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
     field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
     nine::Nine,
@@ -62,6 +63,7 @@ fn main() {
             NineUiPlugin,
             DamagePlugin,
             EnemyPlugin,
+            DirectorPlugin,
         ))
         .configure_loading_state(
             LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
