@@ -1,21 +1,21 @@
 #![feature(more_float_constants)]
+#![feature(vec_try_remove)]
 
 use bevy::{
     color::palettes::css::SILVER,
     gltf::{GltfPlugin, convert_coordinates::GltfConvertCoordinates},
     prelude::*,
 };
-use bevy_asset_loader::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::{ActionPlugin, AvailableAction, OwnedByUnit},
+    actions::ActionPlugin,
     asset::{GameState, NineAssetPlugin},
     damage::{DamagePlugin, Health},
     director::DirectorPlugin,
     enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
     field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
-    nine::Nine,
+    nine::NinePlugin,
     status::StatusPlugin,
     symmetra::SymmetraPlugin,
     turn::{Cpu, Player, TurnPlugin},
@@ -36,12 +36,6 @@ pub mod systems;
 pub mod turn;
 pub mod ui;
 pub mod unit;
-
-#[derive(AssetCollection, Resource)]
-struct NineAssets {
-    #[asset(path = "gltf/nine.glb")]
-    nine: Handle<Gltf>,
-}
 
 fn main() {
     App::new()
@@ -66,10 +60,8 @@ fn main() {
             SymmetraPlugin,
             StatusPlugin,
             DirectorPlugin,
+            NinePlugin,
         ))
-        .configure_loading_state(
-            LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
-        )
         .insert_resource(MeshPickingSettings {
             require_markers: true,
             ray_cast_visibility: RayCastVisibility::Any,
@@ -91,6 +83,10 @@ fn main() {
                     )
                 })
                 .pipe(load_field::<Cpu>),
+                (|| HexCoord::new(0, 0))
+                    // ??? why do I need to annotate this at all?
+                    .pipe::<_, _, Result<Entity>, _>(nine::spawn_at_location)
+                    .pipe(nine::spawn_with_hand),
                 entry,
             )
                 .chain(),
@@ -135,10 +131,9 @@ fn entry(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    gltfs: Res<Assets<Gltf>>,
-    nine_assets: Res<NineAssets>,
+    _gltfs: Res<Assets<Gltf>>,
     enemy_assets: Res<EnemyAssets>,
-    player_field: Res<Field<Player>>,
+    _player_field: Res<Field<Player>>,
     cpu_field: Res<Field<Cpu>>,
     _tf_query: Query<&GlobalTransform>,
 ) {
@@ -164,13 +159,6 @@ fn entry(
         Transform::from_xyz(20.0, 40.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    let gltf = gltfs.get(&nine_assets.nine).unwrap();
-    let h_scene = gltf.default_scene.as_ref().unwrap().clone();
-    let e_cell = player_field.cells.get(&HexCoord::new(0, 0)).unwrap();
-    let e_nine = commands
-        .spawn((WorldAssetRoot(h_scene), Nine, OccupyingCell(*e_cell)))
-        .id();
-
     let e_cell = cpu_field.cells.get(&HexCoord::new(1, -1)).unwrap();
     let _e_mortal = commands
         .spawn((
@@ -192,7 +180,4 @@ fn entry(
 
     dbg!(HexCoord::new(1, -1).row());
     dbg!(HexCoord::new(0, -3).row());
-
-    commands.spawn((crate::nine::Crush, AvailableAction, OwnedByUnit(e_nine)));
-    commands.spawn((crate::nine::Slap, AvailableAction, OwnedByUnit(e_nine)));
 }

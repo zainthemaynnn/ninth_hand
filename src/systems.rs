@@ -36,7 +36,6 @@ pub fn insert_on_hover<T: Component + Default, F: QueryFilter>(
     t_query: Query<Option<&T>, F>,
 ) {
     if let Ok(component) = t_query.get(trigger.entity) {
-        info!("insert!");
         if component.is_none() {
             commands.entity(trigger.entity).insert(T::default());
         }
@@ -49,7 +48,6 @@ pub fn uninsert_on_unhover<T: Component + Default, F: QueryFilter>(
     t_query: Query<(), F>,
 ) {
     if let Ok(()) = t_query.get(trigger.entity) {
-        info!("uninsert!");
         commands.entity(trigger.entity).remove::<T>();
     }
 }

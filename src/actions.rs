@@ -476,11 +476,13 @@ pub fn add_target_on_click(
 pub fn play_primary_target_action(
     _trigger: On<Add, Target>,
     mut commands: Commands,
-    action_query: Query<Entity, (With<SelectedAction>, Without<HasSecondaryTarget>)>,
+    action_query: Query<(Entity, &Action), (With<SelectedAction>, Without<HasSecondaryTarget>)>,
 ) {
-    let Ok(e_action) = action_query.single() else {
+    let Ok((e_action, action)) = action_query.single() else {
         return;
     };
+
+    info!("playing primary target action {:?}", action.name);
 
     commands
         .entity(e_action)

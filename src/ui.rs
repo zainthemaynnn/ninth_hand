@@ -11,7 +11,8 @@ pub struct NineUiPlugin;
 
 impl Plugin for NineUiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, do_rumble);
+        app.add_message::<FloatyTextEvent>()
+            .add_systems(Update, (do_rumble, spawn_floaty_texts));
     }
 }
 

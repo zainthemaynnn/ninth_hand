@@ -7,10 +7,8 @@ use bevy_tweening::{AnimTarget, Delay, Tween, TweenAnim, lens::TransformPosition
 use crate::{
     actions::{Action, CardArt, InPlay, SecondaryTarget, Target, tags::*},
     asset::GameState,
-    damage::DamageEvent,
-    damage::{Damage, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
-    field::MovementEvent,
-    field::{HexCoord, OccupiedByUnit},
+    damage::{Damage, DamageBuffer, DamageEvent, DamageVariant, Health, HealthCap, Resist},
+    field::{Field, HexCoord, MovementEvent, OccupiedByUnit, OccupyingCell},
     status::{Mark, Stacks},
     turn::Player,
     unit::{Unit, UnitDesc},
@@ -81,12 +79,40 @@ pub struct HandAnimationGraph {
     pub fist: AnimationNodeIndex,
 }
 
+pub fn spawn_at_location(
+    In(coord): In<HexCoord>,
+    mut commands: Commands,
+    assets: Res<NineAssets>,
+    field: Res<Field<Player>>,
+) -> Result<Entity> {
+    let Some(e_cell) = field.cells.get(&coord) else {
+        let err = BevyError::new(
+            Severity::Error,
+            format!("coord {:?} not found in field cells", coord),
+        );
+        return Err(err);
+    };
+
+    Ok(commands
+        .spawn((
+            WorldAssetRoot(assets.nine.clone()),
+            Nine,
+            OccupyingCell(*e_cell),
+            Health(1.0),
+        ))
+        .id())
+}
+
 pub fn spawn_with_hand(
-    In(e_nine): In<Entity>,
+    In(e_nine_result): In<Result<Entity>>,
     mut commands: Commands,
     assets: Res<NineAssets>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
 ) {
+    let Ok(e_nine) = e_nine_result else {
+        return;
+    };
+
     let mut graph = AnimationGraph::new();
     let idle = graph.add_clip(assets.hand_float.clone(), 1.0, graph.root);
     let fist = graph.add_clip(assets.hand_fist.clone(), 1.0, graph.root);
@@ -134,9 +160,11 @@ impl Crush {
             &HandAnimationGraph,
         )>,
     ) {
+        info!("playing card");
         if !crush_query.contains(trigger.entity) {
             return;
         }
+        info!("playing crush");
 
         let (_e_cell, target_tf, occupied_by) = target_query.single().unwrap();
         let (e_unit, owns_hand) = unit_query.single().unwrap();
