@@ -1,7 +1,7 @@
 use bevy::{color::palettes, platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::prelude::*;
 
-use crate::asset::GameState;
+use crate::{asset::GameState, ui::FloatyTextEvent};
 
 pub struct DamagePlugin;
 
@@ -10,12 +10,62 @@ impl Plugin for DamagePlugin {
         app.configure_loading_state(
             LoadingStateConfig::new(GameState::AssetLoading).load_collection::<DamageAssets>(),
         )
+        .add_message::<DamageEvent>()
         .add_systems(
             Update,
-            (apply_resist, apply_damage_buffers, die)
-                .chain()
+            (
+                (apply_damage_events, apply_resist, apply_damage_buffers, die).chain(),
+                show_damage_events,
+            )
                 .run_if(in_state(GameState::InGame)),
         );
+    }
+}
+
+#[derive(Message)]
+pub struct DamageEvent {
+    pub damage: Damage,
+    pub target: Entity,
+}
+
+pub fn apply_damage_events(
+    mut events: MessageReader<DamageEvent>,
+    mut buf_query: Query<&mut DamageBuffer>,
+) {
+    for DamageEvent {
+        damage,
+        target: e_target,
+    } in events.read()
+    {
+        let mut damage_buf = buf_query.get_mut(*e_target).unwrap();
+        damage_buf.0.push(damage.clone());
+    }
+}
+
+pub fn show_damage_events(
+    mut events: MessageReader<DamageEvent>,
+    mut text_events: MessageWriter<FloatyTextEvent>,
+    camera_query: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
+    transform_query: Query<&GlobalTransform, Without<Camera3d>>,
+) {
+    let (cam, cam_tf) = camera_query.single().unwrap();
+
+    for DamageEvent {
+        damage,
+        target: e_target,
+    } in events.read()
+    {
+        let target_tf = transform_query.get(*e_target).unwrap();
+        let Ok(screen_pos) = cam.world_to_viewport(cam_tf, target_tf.translation()) else {
+            continue;
+        };
+
+        text_events.write(FloatyTextEvent {
+            text: format!("{0} {1}", damage.ty.symbol(), damage.value),
+            location: screen_pos,
+            color_start: damage.ty.color(),
+            ..Default::default()
+        });
     }
 }
 
@@ -58,7 +108,7 @@ impl DamageVariant {
     pub fn symbol(&self) -> &'static str {
         match self {
             Self::Bash => "BSH",
-            Self::Slash => "CUT",
+            Self::Slash => "SLA",
             Self::Heat => "HOT",
             Self::Cold => "CLD",
             Self::Plague => "PLG",
@@ -89,6 +139,21 @@ pub struct Damage {
     pub value: f32,
     /// The `Entity` that dealt the damage.
     pub source: Option<Entity>,
+}
+
+impl std::ops::MulAssign<f32> for Damage {
+    fn mul_assign(&mut self, rhs: f32) {
+        self.value *= rhs;
+    }
+}
+
+impl std::ops::Mul<f32> for Damage {
+    type Output = Self;
+
+    fn mul(mut self, rhs: f32) -> Self::Output {
+        self *= rhs;
+        self
+    }
 }
 
 /// Health. Is there anything more I can say?

@@ -2,9 +2,14 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
-use bevy_tweening::{PlaybackDirection, PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
+use bevy_tweening::{PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
 
-use crate::{asset::{GameState, UiRightLens}, ui::UiRumble};
+use crate::{
+    actions::{AvailableAction, DrawCount, DrawEvent, draw_actions},
+    asset::{GameState, UiRightLens},
+    systems::countdown_to_state,
+    ui::UiRumble,
+};
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, SubStates)]
 #[source(GameState = GameState::InGame)]
@@ -18,12 +23,6 @@ pub enum TurnState {
     NeutralBusy,
 }
 
-#[derive(AssetCollection, Resource)]
-struct TurnUiAssets {
-    #[asset(path = "img/smile.png")]
-    pub smile: Handle<Image>,
-}
-
 pub struct TurnPlugin;
 
 impl Plugin for TurnPlugin {
@@ -33,18 +32,44 @@ impl Plugin for TurnPlugin {
                 LoadingStateConfig::new(GameState::AssetLoading).load_collection::<TurnUiAssets>(),
             )
             .add_systems(OnEnter(GameState::InGame), insert_player_turn_button)
-            .add_systems(OnEnter(TurnState::Player), (set_ally_rival::<Player, Cpu>, show_player_turn_button))
+            .add_systems(
+                OnEnter(TurnState::Player),
+                (
+                    set_ally_rival::<Player, Cpu>,
+                    show_player_turn_button,
+                    remove_all_available_actions,
+                    shuffle_unit_actions::<Player>.before(draw_actions),
+                ),
+            )
             .add_systems(OnEnter(TurnState::PlayerBusy), hide_player_turn_button)
-            .add_systems(Update, plr_busy_wait.run_if(in_state(TurnState::PlayerBusy)))
-            .add_systems(OnEnter(TurnState::Cpu), set_ally_rival::<Cpu, Player>)
+            .add_systems(
+                Update,
+                (|| TurnState::Cpu)
+                    .pipe(countdown_to_state::<1000, _>)
+                    .run_if(in_state(TurnState::PlayerBusy)),
+            )
+            .add_systems(
+                OnEnter(TurnState::Cpu),
+                (
+                    set_ally_rival::<Cpu, Player>,
+                    remove_all_available_actions,
+                    shuffle_unit_actions::<Cpu>.before(draw_actions),
+                    advance_enemy_turn,
+                ),
+            )
             .add_systems(
                 Update,
                 advance_player_turn_button.run_if(in_state(TurnState::Player)),
             )
             // placeholders for now
-            .add_systems(OnEnter(TurnState::Cpu), advance_enemy_turn)
             .add_systems(OnEnter(TurnState::Neutral), advance_neutral_turn);
     }
+}
+
+#[derive(AssetCollection, Resource)]
+struct TurnUiAssets {
+    #[asset(path = "img/smile.png")]
+    pub _smile: Handle<Image>,
 }
 
 /// Describes components related to the current turn's player.
@@ -55,7 +80,7 @@ pub struct Ally;
 #[derive(Component, Default)]
 pub struct Rival;
 
-pub trait Team: Send + Sync + 'static {}
+pub trait Team: Component {}
 
 #[derive(Component, Default)]
 pub struct Player;
@@ -88,11 +113,12 @@ pub fn insert_player_turn_button(mut commands: Commands) {
     let mut tween_anim = TweenAnim::new(Tween::new(
         EaseFunction::QuadraticIn,
         Duration::from_millis(200),
-        UiPositionLens  {
+        UiPositionLens {
             start: UiRect::right(Val::Px(0.0)),
             end: UiRect::right(Val::Px(-48.0)),
-        }
-    )).with_destroy_on_completed(false);
+        },
+    ))
+    .with_destroy_on_completed(false);
     tween_anim.playback_state = PlaybackState::Paused;
 
     commands
@@ -142,32 +168,32 @@ pub fn insert_player_turn_button(mut commands: Commands) {
 pub fn show_player_turn_button(mut button_query: Query<&mut TweenAnim, With<EndTurnButton>>) {
     let mut anim = button_query.single_mut().unwrap();
 
-    let mut show_tween = Tween::new(
+    let show_tween = Tween::new(
         EaseFunction::QuadraticIn,
         Duration::from_millis(200),
-        UiRightLens  {
+        UiRightLens {
             start: Val::Px(-48.0),
             end: Val::Px(0.0),
-        }
+        },
     );
 
-    anim.set_tweenable(show_tween);
+    anim.set_tweenable(show_tween).unwrap();
     anim.playback_state = PlaybackState::Playing;
 }
 
 pub fn hide_player_turn_button(mut button_query: Query<&mut TweenAnim, With<EndTurnButton>>) {
     let mut anim = button_query.single_mut().unwrap();
 
-    let mut hide_tween = Tween::new(
+    let hide_tween = Tween::new(
         EaseFunction::QuadraticIn,
         Duration::from_millis(200),
-        UiRightLens  {
+        UiRightLens {
             start: Val::Px(0.0),
             end: Val::Px(-48.0),
-        }
+        },
     );
 
-    anim.set_tweenable(hide_tween);
+    anim.set_tweenable(hide_tween).unwrap();
     anim.playback_state = PlaybackState::Playing;
 }
 
@@ -209,9 +235,9 @@ pub fn advance_neutral_turn(mut next_state: ResMut<NextState<TurnState>>) {
 
 // dummy turn wait thing
 pub fn plr_busy_wait(
-    time: Res<Time>, 
+    time: Res<Time>,
     // Local timer initialized automatically to a 1.0 second non-repeating fuse
-    mut my_timer: Local<Timer>, 
+    mut my_timer: Local<Timer>,
     mut initialized: Local<bool>,
     mut next_state: ResMut<NextState<TurnState>>,
 ) {
@@ -228,5 +254,26 @@ pub fn plr_busy_wait(
     if my_timer.just_finished() {
         *initialized = false;
         next_state.set(TurnState::Cpu);
+    }
+}
+
+pub fn remove_all_available_actions(
+    mut commands: Commands,
+    action_query: Query<Entity, With<AvailableAction>>,
+) {
+    for e_action in action_query {
+        commands.entity(e_action).remove::<AvailableAction>();
+    }
+}
+
+pub fn shuffle_unit_actions<T: Team>(
+    mut draw_events: MessageWriter<DrawEvent>,
+    collection_query: Query<(Entity, &DrawCount), With<T>>,
+) {
+    for (e_unit, draw_count) in collection_query {
+        draw_events.write(DrawEvent {
+            amount: draw_count.amount,
+            unit: e_unit,
+        });
     }
 }

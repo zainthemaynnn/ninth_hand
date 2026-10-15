@@ -1,6 +1,10 @@
 use bevy::prelude::*;
 
-use crate::{actions::{Action, tags::*}, turn::Cpu, unit::{Unit, UnitDesc}};
+use crate::{
+    actions::{Action, tags::*},
+    turn::Cpu,
+    unit::{Unit, UnitDesc},
+};
 
 #[derive(Component)]
 #[require(

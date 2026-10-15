@@ -1,17 +1,18 @@
 use std::time::Duration;
 
-use bevy::{ecs::system::IntoObserverSystem, platform::collections::HashMap, prelude::*};
+use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::prelude::*;
-use bevy_tweening::{
-    AnimCompletedEvent, AnimTarget, Delay, Tween, TweenAnim, lens::TransformPositionLens,
-};
+use bevy_tweening::{AnimTarget, Delay, Tween, TweenAnim, lens::TransformPositionLens};
 
 use crate::{
-    actions::{Action, CardArt, InPlay, Target, tags::*},
+    actions::{Action, CardArt, InPlay, SecondaryTarget, Target, tags::*},
     asset::GameState,
+    damage::DamageEvent,
     damage::{Damage, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
-    field::{Field, OccupiedByUnit},
-    turn::{Ally, Cpu, Player, Rival, TurnState},
+    field::MovementEvent,
+    field::{HexCoord, OccupiedByUnit},
+    status::{Mark, Stacks},
+    turn::Player,
     unit::{Unit, UnitDesc},
 };
 
@@ -19,10 +20,12 @@ pub struct NinePlugin;
 
 impl Plugin for NinePlugin {
     fn build(&self, app: &mut App) {
-        app.configure_loading_state(
-            LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
-        )
-        .add_observer(Crush::play);
+        app.add_observer(Crush::_play)
+            .add_observer(Slap::_play)
+            .add_observer(Gaze::_play)
+            .configure_loading_state(
+                LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
+            );
     }
 }
 
@@ -113,11 +116,11 @@ pub fn spawn_with_hand(
 pub struct Crush;
 
 impl Crush {
-    fn play(
+    fn _play(
         trigger: On<Add, InPlay>,
         mut commands: Commands,
-        assets: Res<NineAssets>,
-        mut animation_graphs: ResMut<Assets<AnimationGraph>>,
+        _assets: Res<NineAssets>,
+        _animation_graphs: ResMut<Assets<AnimationGraph>>,
         crush_query: Query<(), With<Crush>>,
         target_query: Query<(Entity, &GlobalTransform, &OccupiedByUnit), With<Target>>,
         mut enemy_query: Query<&mut DamageBuffer>,
@@ -135,9 +138,9 @@ impl Crush {
             return;
         }
 
-        let (e_cell, target_tf, occupied_by) = target_query.single().unwrap();
+        let (_e_cell, target_tf, occupied_by) = target_query.single().unwrap();
         let (e_unit, owns_hand) = unit_query.single().unwrap();
-        let (e_hand, hand, mut hand_tf, mut animator, mut transitions, graph) =
+        let (e_hand, hand, hand_tf, mut animator, mut transitions, graph) =
             hand_query.get_mut(owns_hand.0).unwrap();
 
         let mut damage_buffer = enemy_query.get_mut(occupied_by.get()).unwrap();
@@ -176,17 +179,19 @@ impl Crush {
 
         transitions.play(animator.as_mut(), graph.fist, Duration::from_millis(500));
 
-        commands
-            .spawn((TweenAnim::new(tween), AnimTarget::component::<Transform>(e_hand)));
-            // .observe(|trigger: On<AnimCompletedEvent>| {
-            //     transitions.play(animator.as_mut(), graph.idle, Duration::from_millis(500));
-            // });
+        commands.spawn((
+            TweenAnim::new(tween),
+            AnimTarget::component::<Transform>(e_hand),
+        ));
+        // .observe(|trigger: On<AnimCompletedEvent>| {
+        //     transitions.play(animator.as_mut(), graph.idle, Duration::from_millis(500));
+        // });
     }
 }
 
 #[derive(Component)]
 #[require(
-    Action { name: "Slap", description: "Damage 1 front 3x" },
+    Action { name: "Slap", description: "Damage 2 front, move to adjacent tile" },
     Damage,
     FrontTarget,
     SingleTarget,
@@ -197,8 +202,43 @@ impl Crush {
 pub struct Slap;
 
 impl Slap {
-    fn play() {
-        todo!();
+    fn _play(
+        trigger: On<Add, InPlay>,
+        unit_query: Query<Entity, With<Nine>>,
+        action_query: Query<(), With<Slap>>,
+        target_query: Query<(Entity, &OccupiedByUnit), With<Target>>,
+        secondary_target_query: Query<Entity, With<SecondaryTarget>>,
+        coord_query: Query<&HexCoord>,
+        mut damage_events: MessageWriter<DamageEvent>,
+        mut move_events: MessageWriter<MovementEvent>,
+    ) {
+        if !action_query.contains(trigger.entity) {
+            return;
+        }
+
+        // man, all this querying is convoluted
+        // perhaps there is an easier way to apply movement
+        let e_unit = unit_query.single().unwrap();
+        let (e_enemy_cell, occupied_by) = target_query.single().unwrap();
+        let e_enemy = occupied_by.iter().next().unwrap();
+        let e_knock_cell = secondary_target_query.single().unwrap();
+
+        let attack_src = coord_query.get(e_enemy_cell).unwrap();
+        let attack_dst = coord_query.get(e_knock_cell).unwrap();
+
+        damage_events.write(DamageEvent {
+            damage: Damage {
+                ty: DamageVariant::Bash,
+                value: 2.0,
+                source: Some(e_unit),
+            },
+            target: e_enemy,
+        });
+
+        move_events.write(MovementEvent {
+            direction: HexCoord::new(attack_dst.q - attack_src.q, attack_dst.r - attack_src.r),
+            target: e_enemy,
+        });
     }
 }
 
@@ -214,8 +254,24 @@ impl Slap {
 pub struct Gaze;
 
 impl Gaze {
-    fn play() {
-        todo!();
+    fn _play(
+        trigger: On<Add, InPlay>,
+        mut commands: Commands,
+        action_query: Query<(), With<Gaze>>,
+        target_query: Query<&OccupiedByUnit, With<Target>>,
+        _unit_query: Query<Entity, With<Nine>>,
+    ) {
+        if !action_query.contains(trigger.entity) {
+            return;
+        }
+
+        let occupied_by = target_query.single().unwrap();
+        let e_target = occupied_by.iter().next().unwrap();
+        commands
+            .entity(e_target)
+            .entry::<Stacks<Mark>>()
+            .or_default()
+            .and_modify(|mut stacks| stacks.add(1));
     }
 }
 
@@ -233,7 +289,7 @@ impl Gaze {
 pub struct Swallow;
 
 impl Swallow {
-    fn play() {
+    fn _play() {
         todo!();
     }
 }

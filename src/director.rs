@@ -1,5 +1,4 @@
 use bevy::asset::RenderAssetUsages;
-use bevy::math::cubic_splines::{CubicBezier, CubicGenerator};
 use bevy::platform::collections::HashMap;
 use bevy::{
     math::Affine2,
@@ -33,7 +32,6 @@ pub struct DirectorMaterials(pub HashMap<Highlighter, Handle<StandardMaterial>>)
 impl FromWorld for DirectorMaterials {
     fn from_world(world: &mut World) -> Self {
         let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
-        let handle = materials.add(StandardMaterial::default());
         DirectorMaterials(HashMap::from(Highlighter::VALUES.map(|v| {
             (
                 v,
