@@ -43,8 +43,7 @@ impl Plugin for FieldPlugin {
             // not sure if this is still needed yet; might still be short periods where two exist
             // .add_observer(enforce_one::<HoveredCell>)
             .add_observer(animate_highlighted_cell)
-            .add_observer(deanimate_dehighlighted_cell)
-            .add_observer(dehighlight_deselected_cell);
+            .add_observer(deanimate_dehighlighted_cell);
     }
 }
 
@@ -151,9 +150,6 @@ impl FromWorld for HexMesh {
 
 #[derive(Component, Default)]
 #[component(storage = "SparseSet")]
-#[require(
-    HighlightedCell { ty: Highlighter::Red },
-)]
 pub struct SelectedCell;
 
 #[derive(Component, Default)]
@@ -341,11 +337,6 @@ pub fn deanimate_dehighlighted_cell(trigger: On<Remove, HighlightedCell>, mut co
         .entity(trigger.entity)
         .insert(MeshMaterial3d::<StandardMaterial>::default());
 }
-
-pub fn dehighlight_deselected_cell(trigger: On<Remove, SelectedCell>, mut commands: Commands) {
-    commands.entity(trigger.entity).remove::<HighlightedCell>();
-}
-
 #[derive(Message)]
 pub struct MovementEvent {
     pub direction: HexCoord,
