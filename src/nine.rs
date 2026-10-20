@@ -229,7 +229,7 @@ impl Crush {
 
                     commands.spawn((
                         TweenAnim::new(tween),
-                        AnimTarget::component::<Transform>(trigger.anim_entity),
+                        AnimTarget::component::<Transform>(e_hand),
                     ));
                     // transitions.play(animator.as_mut(), graph.idle, Duration::from_millis(500));
                 },
