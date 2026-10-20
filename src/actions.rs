@@ -3,7 +3,8 @@ use std::time::Duration;
 use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_tweening::{
-    PlaybackDirection, PlaybackState, Tween, TweenAnim, Tweenable, lens::UiPositionLens,
+    AnimCompletedEvent, AnimTarget, PlaybackDirection, PlaybackState, Tween, TweenAnim, Tweenable,
+    lens::{UiPositionLens, UiTransformRotationLens},
 };
 use rand::seq::IteratorRandom;
 
@@ -38,6 +39,8 @@ impl Plugin for ActionPlugin {
             .add_observer(play_primary_target_action)
             .add_observer(highlight_secondary_targets)
             .add_observer(play_secondary_target_action)
+            .add_observer(deselect_played_action)
+            .add_observer(discard_card_animation)
             .configure_loading_state(
                 LoadingStateConfig::new(GameState::AssetLoading).load_collection::<CardAssets>(),
             );
@@ -224,6 +227,9 @@ pub struct Untargettable;
 #[component(storage = "SparseSet")]
 pub struct InPlay;
 
+#[derive(Component, Debug, Default)]
+pub struct Discarded;
+
 pub fn set_action_bar(mut commands: Commands) {
     commands.spawn((
         ActionBar,
@@ -281,6 +287,7 @@ pub fn update_action_bar(
                     },
                     ImageNode::new(card_assets.backgrounds.get(card_art.0).unwrap().clone()),
                     Interaction::default(),
+                    UiTransform::default(),
                     selection_tween,
                 ))
                 .with_children(|parent| {
@@ -476,18 +483,13 @@ pub fn add_target_on_click(
 pub fn play_primary_target_action(
     _trigger: On<Add, Target>,
     mut commands: Commands,
-    action_query: Query<(Entity, &Action), (With<SelectedAction>, Without<HasSecondaryTarget>)>,
+    action_query: Single<(Entity, &Action), (With<SelectedAction>, Without<HasSecondaryTarget>)>,
 ) {
-    let Ok((e_action, action)) = action_query.single() else {
-        return;
-    };
+    let (e_action, action) = action_query.into_inner();
 
     info!("playing primary target action {:?}", action.name);
 
-    commands
-        .entity(e_action)
-        .insert(InPlay)
-        .remove::<SelectedAction>();
+    commands.trigger(Played { entity: e_action });
 }
 
 pub fn highlight_secondary_targets(
@@ -517,8 +519,61 @@ pub fn play_secondary_target_action(
         return;
     };
 
-    commands
-        .entity(e_action)
-        .insert(InPlay)
-        .remove::<SelectedAction>();
+    commands.trigger(Played { entity: e_action });
+}
+
+#[derive(EntityEvent)]
+pub struct Played {
+    pub entity: Entity,
+}
+
+pub fn deselect_played_action(
+    trigger: On<Played>,
+    mut commands: Commands,
+    action_query: Query<&OwnsCard>,
+) {
+    commands.entity(trigger.entity).remove::<SelectedAction>();
+    let OwnsCard(e_card) = action_query.get(trigger.entity).unwrap();
+    commands.entity(*e_card).insert(Discarded);
+}
+
+pub fn discard_card_animation(trigger: On<Add, Discarded>, mut commands: Commands) {
+    let rot_tween = Tween::new(
+        EaseFunction::QuadraticOut,
+        Duration::from_millis(100),
+        UiTransformRotationLens {
+            start: Rot2::IDENTITY,
+            end: Rot2::degrees(15.0),
+        },
+    );
+    let move_tween = Tween::new(
+        EaseFunction::QuadraticOut,
+        Duration::from_millis(800),
+        UiPositionLens {
+            start: UiRect::bottom(CARD_STICKOUT).with_top(-CARD_STICKOUT),
+            end: UiRect::bottom(Val::Percent(-120.0)).with_top(Val::Percent(120.0)),
+        },
+    );
+
+    commands.entity(trigger.entity).with_children(|parent| {
+        parent.spawn((
+            TweenAnim::new(rot_tween),
+            AnimTarget::component::<UiTransform>(parent.target_entity()),
+        ));
+        parent
+            .spawn((
+                TweenAnim::new(move_tween),
+                AnimTarget::component::<Node>(parent.target_entity()),
+            ))
+            .observe(
+                move |trigger: On<AnimCompletedEvent>,
+                      mut commands: Commands,
+                      parent: Query<&ChildOf>| {
+                    commands
+                        .entity(parent.get(trigger.anim_entity).unwrap().0)
+                        .despawn();
+                    info!("floaty text despawned");
+                },
+            );
+    });
 }

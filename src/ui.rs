@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy_tweening::{
-    AnimCompletedEvent, Tween, TweenAnim,
-    lens::{TextColorLens, UiTransformTranslationPxLens},
+    AnimCompletedEvent, AnimTarget, Tween, TweenAnim,
+    lens::{TextColorLens, UiPositionLens},
 };
 use noisy_bevy::simplex_noise_2d;
 
@@ -62,10 +62,10 @@ impl Default for FloatyTextEvent {
         Self {
             text: String::default(),
             location: Vec2::default(),
-            fade: Duration::default(),
-            size: 10.0,
+            fade: Duration::from_secs(1),
+            size: 24.0,
             color_start: Color::WHITE,
-            color_end: Color::BLACK.with_alpha(1.0),
+            color_end: Color::BLACK.with_alpha(0.0),
         }
     }
 }
@@ -74,12 +74,8 @@ fn floaty_text_template(text: String, location: Vec2, size: f32) -> impl Scene {
     bsn! {
         Node {
             position_type: PositionType::Absolute,
-        }
-
-        UiTransform {
-            translation: {Val2::px(location.x, location.y)},
-            rotation: Rot2::IDENTITY,
-            scale: Vec2::ONE,
+            top: px(location.y),
+            left: px(location.x),
         }
 
         Text::new(text)
@@ -101,34 +97,56 @@ pub fn spawn_floaty_texts(mut commands: Commands, mut events: MessageReader<Floa
     } in events.read()
     {
         let mut rng = rand::rng();
-        let spawn_zone = Circle::new(0.5);
+        let spawn_zone = Circle::new(1.0);
         let float_dir = spawn_zone.sample_boundary(&mut rng);
-
-        let move_tween = TweenAnim::new(Tween::new(
-            EaseFunction::QuadraticIn,
-            fade.clone(),
-            UiTransformTranslationPxLens {
-                start: *location,
-                end: *location + float_dir * 16.0,
-            },
-        ));
-        let color_tween = TweenAnim::new(Tween::new(
-            EaseFunction::QuadraticIn,
-            fade.clone(),
-            TextColorLens {
-                start: *color_start,
-                end: *color_end,
-            },
-        ));
 
         commands
             .spawn_scene(floaty_text_template(text.clone(), *location, *size))
-            .insert((move_tween, color_tween))
-            .observe(
-                move |trigger: On<AnimCompletedEvent>, mut commands: Commands| {
-                    commands.entity(trigger.anim_entity).despawn();
-                    println!("Floaty text cleanly despawned on animation end!");
-                },
-            );
+            .with_children(|parent| {
+                let move_tween = Tween::new(
+                    EaseFunction::QuadraticOut,
+                    fade.clone(),
+                    UiPositionLens {
+                        start: UiRect {
+                            top: Val::Px(location.y),
+                            left: Val::Px(location.x),
+                            ..Default::default()
+                        },
+                        end: UiRect {
+                            top: Val::Px(location.y + float_dir.y * 64.0),
+                            left: Val::Px(location.x + float_dir.x * 64.0),
+                            ..Default::default()
+                        },
+                    },
+                );
+                let color_tween = Tween::new(
+                    EaseFunction::QuadraticIn,
+                    fade.clone(),
+                    TextColorLens {
+                        start: *color_start,
+                        end: *color_end,
+                    },
+                );
+
+                parent.spawn((
+                    TweenAnim::new(move_tween),
+                    AnimTarget::component::<Node>(parent.target_entity()),
+                ));
+                parent
+                    .spawn((
+                        TweenAnim::new(color_tween),
+                        AnimTarget::component::<TextColor>(parent.target_entity()),
+                    ))
+                    .observe(
+                        move |trigger: On<AnimCompletedEvent>,
+                              mut commands: Commands,
+                              parent: Query<&ChildOf>| {
+                            commands
+                                .entity(parent.get(trigger.anim_entity).unwrap().0)
+                                .despawn();
+                            info!("floaty text despawned");
+                        },
+                    );
+            });
     }
 }
