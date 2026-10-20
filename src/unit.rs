@@ -14,7 +14,14 @@ pub struct UnitPlugin;
 impl Plugin for UnitPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::InGame), spawn_unit_details_window)
-            .add_systems(Update, (reposition::<Player>, reposition::<Cpu>))
+            .add_systems(
+                Update,
+                (
+                    reposition::<Player>,
+                    reposition::<Cpu>,
+                    refresh_hovered_unit_health,
+                ),
+            )
             .add_observer(show_unit_details)
             .add_observer(hide_unit_details)
             .add_observer(show_unit_health)
@@ -241,6 +248,19 @@ pub fn show_unit_health(
 
     let mut health_bar_node = health_bar_query.single_mut().unwrap();
     health_bar_node.width = Val::Percent(health.0 / health_cap.0 * 100.0);
+}
+
+pub fn refresh_hovered_unit_health(
+    hovered_unit_query: Query<(&Health, &HealthCap), (With<HoveredUnit>, Changed<Health>)>,
+    mut health_bar_query: Query<&mut Node, With<HealthBar>>,
+) {
+    for (health, health_cap) in &hovered_unit_query {
+        let Ok(mut health_bar_node) = health_bar_query.single_mut() else {
+            return;
+        };
+
+        health_bar_node.width = Val::Percent(health.0 / health_cap.0 * 100.0);
+    }
 }
 
 pub fn show_unit_resist(
