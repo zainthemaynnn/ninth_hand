@@ -1,16 +1,23 @@
-use std::time::Duration;
+use std::{
+    f32::consts::{FRAC_PI_3, FRAC_PI_6, TAU},
+    time::Duration,
+};
 
 use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::prelude::*;
-use bevy_tweening::{AnimTarget, Delay, Tween, TweenAnim, lens::TransformPositionLens};
+use bevy_hanabi::prelude::*;
+use bevy_tweening::{
+    AnimCompletedEvent, AnimTarget, Delay, Tween, TweenAnim, lens::TransformPositionLens,
+};
 
 use crate::{
-    actions::{Action, CardArt, InPlay, SecondaryTarget, Target, tags::*},
+    actions::{Action, CardArt, Played, SecondaryTarget, Target, tags::*},
     asset::GameState,
-    damage::{Damage, DamageBuffer, DamageEvent, DamageVariant, Health, HealthCap, Resist},
+    damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, KillingSomething, Resist},
     field::{Field, HexCoord, MovementEvent, OccupiedByUnit, OccupyingCell},
     status::{Mark, Stacks},
-    turn::Player,
+    systems::AnimatorEntity,
+    turn::{Killed, Player},
     unit::{Unit, UnitDesc},
 };
 
@@ -18,10 +25,12 @@ pub struct NinePlugin;
 
 impl Plugin for NinePlugin {
     fn build(&self, app: &mut App) {
-        app.add_observer(Crush::_play)
-            .add_observer(Slap::_play)
-            .add_observer(Gaze::_play)
+        app.init_resource::<NineKillEffect>()
+            .add_observer(Crush::play)
+            .add_observer(Slap::play)
+            .add_observer(Gaze::play)
             .add_observer(crate::systems::log_added_component::<AnimationPlayer>)
+            .add_observer(kill_effect)
             .configure_loading_state(
                 LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
             );
@@ -60,7 +69,7 @@ pub struct NineAssets {
 )]
 pub struct Nine;
 
-#[derive(Component)]
+#[derive(Component, Debug, Clone)]
 pub struct Hand {
     pub rest_position: Transform,
 }
@@ -143,43 +152,30 @@ pub fn spawn_with_hand(
 pub struct Crush;
 
 impl Crush {
-    fn _play(
-        trigger: On<Add, InPlay>,
+    fn play(
+        _trigger: On<Played>,
         mut commands: Commands,
         _assets: Res<NineAssets>,
         _animation_graphs: ResMut<Assets<AnimationGraph>>,
-        children: Query<&Children>,
-        crush_query: Query<(), With<Crush>>,
         target_query: Query<(Entity, &GlobalTransform, &OccupiedByUnit), With<Target>>,
-        mut enemy_query: Query<&mut DamageBuffer>,
         unit_query: Query<(Entity, &OwnsHand), With<Nine>>,
-        mut hand_query: Query<(Entity, &Hand, &mut Transform, &HandAnimationGraph)>,
+        mut hand_query: Query<(
+            Entity,
+            &Hand,
+            &mut Transform,
+            &HandAnimationGraph,
+            &AnimatorEntity,
+        )>,
         mut animator_query: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
     ) {
-        if !crush_query.contains(trigger.entity) {
-            return;
-        }
-
         let (_e_cell, target_tf, occupied_by) = target_query.single().unwrap();
+
+        let e_enemy = occupied_by.get();
         let (e_unit, owns_hand) = unit_query.single().unwrap();
-        let (e_hand, hand, hand_tf, graph) = hand_query.get_mut(owns_hand.0).unwrap();
+        let (e_hand, hand, hand_tf, graph, AnimatorEntity(e_animator)) =
+            hand_query.get_mut(owns_hand.0).unwrap();
 
-        let Some(e_animator) = children
-            .iter_descendants(e_hand)
-            .find(|&e_child| animator_query.contains(e_child))
-        else {
-            warn!("failed to locate animator");
-            return;
-        };
-
-        let (mut animator, mut transitions) = animator_query.get_mut(e_animator).unwrap();
-
-        let mut damage_buffer = enemy_query.get_mut(occupied_by.get()).unwrap();
-        damage_buffer.0.push(crate::damage::Damage {
-            ty: DamageVariant::Bash,
-            value: 5f32,
-            source: Some(e_unit),
-        });
+        let (mut animator, mut transitions) = animator_query.get_mut(*e_animator).unwrap();
 
         let tween = Tween::new(
             EaseFunction::QuadraticOut,
@@ -197,26 +193,47 @@ impl Crush {
                 start: target_tf.translation() + Vec3::Y * 8.0,
                 end: target_tf.translation(),
             },
-        ))
-        .then(Delay::new(Duration::from_millis(500)))
-        .then(Tween::new(
-            EaseFunction::QuadraticOut,
-            Duration::from_secs(2),
-            TransformPositionLens {
-                start: target_tf.translation(),
-                end: hand.rest_position.translation,
-            },
         ));
 
         transitions.play(animator.as_mut(), graph.fist, Duration::from_millis(500));
 
-        commands.spawn((
-            TweenAnim::new(tween),
-            AnimTarget::component::<Transform>(e_hand),
-        ));
-        // .observe(|trigger: On<AnimCompletedEvent>| {
-        //     transitions.play(animator.as_mut(), graph.idle, Duration::from_millis(500));
-        // });
+        let target_tf = (*target_tf).clone();
+        let hand = (*hand).clone();
+
+        commands
+            .spawn((
+                TweenAnim::new(tween),
+                AnimTarget::component::<Transform>(e_hand),
+            ))
+            .observe(
+                move |trigger: On<AnimCompletedEvent>,
+                      mut damage_events: MessageWriter<DamageEvent>,
+                      mut commands: Commands| {
+                    damage_events.write(DamageEvent {
+                        damage: Damage {
+                            ty: DamageVariant::Bash,
+                            value: 2.0,
+                            source: Some(e_unit),
+                        },
+                        target: e_enemy,
+                    });
+
+                    let tween = Delay::new(Duration::from_millis(500)).then(Tween::new(
+                        EaseFunction::QuadraticOut,
+                        Duration::from_secs(2),
+                        TransformPositionLens {
+                            start: target_tf.translation(),
+                            end: hand.rest_position.translation,
+                        },
+                    ));
+
+                    commands.spawn((
+                        TweenAnim::new(tween),
+                        AnimTarget::component::<Transform>(trigger.anim_entity),
+                    ));
+                    // transitions.play(animator.as_mut(), graph.idle, Duration::from_millis(500));
+                },
+            );
     }
 }
 
@@ -233,26 +250,21 @@ impl Crush {
 pub struct Slap;
 
 impl Slap {
-    fn _play(
-        trigger: On<Add, InPlay>,
-        unit_query: Query<Entity, With<Nine>>,
-        action_query: Query<(), With<Slap>>,
-        target_query: Query<(Entity, &OccupiedByUnit), With<Target>>,
-        secondary_target_query: Query<Entity, With<SecondaryTarget>>,
+    fn play(
+        _trigger: On<Played>,
+        unit_query: Single<Entity, With<Nine>>,
+        target_query: Single<(Entity, &OccupiedByUnit), With<Target>>,
+        secondary_target_query: Single<Entity, With<SecondaryTarget>>,
         coord_query: Query<&HexCoord>,
         mut damage_events: MessageWriter<DamageEvent>,
         mut move_events: MessageWriter<MovementEvent>,
     ) {
-        if !action_query.contains(trigger.entity) {
-            return;
-        }
-
         // man, all this querying is convoluted
         // perhaps there is an easier way to apply movement
-        let e_unit = unit_query.single().unwrap();
-        let (e_enemy_cell, occupied_by) = target_query.single().unwrap();
+        let e_unit = unit_query.into_inner();
+        let (e_enemy_cell, occupied_by) = target_query.into_inner();
         let e_enemy = occupied_by.iter().next().unwrap();
-        let e_knock_cell = secondary_target_query.single().unwrap();
+        let e_knock_cell = secondary_target_query.into_inner();
 
         let attack_src = coord_query.get(e_enemy_cell).unwrap();
         let attack_dst = coord_query.get(e_knock_cell).unwrap();
@@ -285,18 +297,13 @@ impl Slap {
 pub struct Gaze;
 
 impl Gaze {
-    fn _play(
-        trigger: On<Add, InPlay>,
+    fn play(
+        _trigger: On<Played>,
         mut commands: Commands,
-        action_query: Query<(), With<Gaze>>,
-        target_query: Query<&OccupiedByUnit, With<Target>>,
+        target_query: Single<&OccupiedByUnit, With<Target>>,
         _unit_query: Query<Entity, With<Nine>>,
     ) {
-        if !action_query.contains(trigger.entity) {
-            return;
-        }
-
-        let occupied_by = target_query.single().unwrap();
+        let occupied_by = target_query.into_inner();
         let e_target = occupied_by.iter().next().unwrap();
         commands
             .entity(e_target)
@@ -323,4 +330,99 @@ impl Swallow {
     fn _play() {
         todo!();
     }
+}
+
+#[derive(Resource)]
+pub struct NineKillEffect(pub Handle<EffectAsset>);
+
+impl FromWorld for NineKillEffect {
+    fn from_world(world: &mut World) -> Self {
+        let mut effects = world.resource_mut::<Assets<EffectAsset>>();
+
+        let writer = ExprWriter::new();
+
+        let angle = writer.rand(ScalarType::Float) * writer.lit(TAU);
+
+        let pi_div_3 = writer.lit(FRAC_PI_3);
+        let pi_div_6 = writer.lit(FRAC_PI_6);
+
+        let local_angle = (angle.clone() % pi_div_3) - pi_div_6;
+        let edge_profile = local_angle.cos();
+
+        let max_radius = writer.lit(0.5);
+        let r = writer.rand(ScalarType::Float).sqrt() * (max_radius / edge_profile);
+
+        let x = r.clone() * angle.clone().cos();
+        let y = r * angle.sin();
+        let z = writer.lit(-0.1);
+        let position = x.vec3(y, z).expr();
+
+        let init_pos = SetAttributeModifier::new(Attribute::POSITION, position);
+        let init_velocity = SetAttributeModifier::new(
+            Attribute::VELOCITY,
+            writer.lit(Vec3::new(0.0, 0.0, -1.0)).expr(),
+        );
+        let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+        let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, writer.lit(1.0).expr());
+        let init_color = SetAttributeModifier::new(
+            Attribute::COLOR,
+            writer.lit(LinearRgba::BLACK.as_u32()).expr(),
+        );
+        let init_size = SetAttributeModifier::new(Attribute::SIZE, writer.lit(0.1).expr());
+        let gravity = AccelModifier::new(writer.lit(Vec3::new(0.0, 0.0, 0.1)).expr());
+
+        let h_effect = effects.add(
+            EffectAsset::new(4096, SpawnerSettings::rate(100.0.into()), writer.finish())
+                .with_name("HexagonSpawner")
+                .init(init_pos)
+                .init(init_velocity)
+                .init(init_age)
+                .init(init_lifetime)
+                .init(init_color)
+                .init(init_size)
+                .with_simulation_space(SimulationSpace::Local)
+                .update(gravity),
+        );
+
+        Self(h_effect)
+    }
+}
+
+pub fn kill_effect(
+    trigger: On<KillingSomething>,
+    mut commands: Commands,
+    unit_query: Query<&OccupyingCell>,
+    kill_effect: Res<NineKillEffect>,
+) {
+    info!("Activating kill effect");
+    let occupying_cell = unit_query.get(trigger.killed).unwrap();
+    let e_cell = occupying_cell.0;
+    let e_effect = commands
+        .spawn(ParticleEffect::new(kill_effect.0.clone()))
+        .id();
+    commands.entity(e_cell).add_child(e_effect);
+
+    commands.entity(trigger.killed).observe(
+        move |trigger: On<Killed>, mut commands: Commands, unit_query: Query<&Transform>| {
+            info!("Killing");
+            let unit_tf = unit_query.get(trigger.entity).unwrap();
+            let tween = Tween::new(
+                EaseFunction::QuinticIn,
+                Duration::from_millis(1000),
+                TransformPositionLens {
+                    start: unit_tf.translation,
+                    end: unit_tf.translation - Vec3::new(0.0, 8.0, 0.0),
+                },
+            );
+            commands
+                .entity(trigger.entity)
+                .insert(TweenAnim::new(tween))
+                .observe(
+                    move |_trigger: On<AnimCompletedEvent>, mut commands: Commands| {
+                        info!("killed");
+                        commands.entity(e_effect).despawn();
+                    },
+                );
+        },
+    );
 }

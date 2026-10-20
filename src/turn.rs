@@ -7,6 +7,7 @@ use bevy_tweening::{PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
 use crate::{
     actions::{AvailableAction, DrawCount, DrawEvent, draw_actions},
     asset::{GameState, UiRightLens},
+    damage::Dead,
     systems::countdown_to_state,
     ui::UiRumble,
 };
@@ -41,7 +42,10 @@ impl Plugin for TurnPlugin {
                     shuffle_unit_actions::<Player>.before(draw_actions),
                 ),
             )
-            .add_systems(OnEnter(TurnState::PlayerBusy), hide_player_turn_button)
+            .add_systems(
+                OnEnter(TurnState::PlayerBusy),
+                (hide_player_turn_button, kill_units::<Cpu>),
+            )
             .add_systems(
                 Update,
                 (|| TurnState::Cpu)
@@ -276,4 +280,18 @@ pub fn shuffle_unit_actions<T: Team>(
             unit: e_unit,
         });
     }
+}
+
+pub fn kill_units<T: Team>(
+    dead_query: Query<Entity, (With<Dead>, With<T>)>,
+    mut commands: Commands,
+) {
+    for e_dead in dead_query {
+        commands.trigger(Killed { entity: e_dead });
+    }
+}
+
+#[derive(EntityEvent)]
+pub struct Killed {
+    pub entity: Entity,
 }

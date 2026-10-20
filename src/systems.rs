@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use bevy::{ecs::query::QueryFilter, prelude::*, state::state::FreelyMutableState};
+use bevy::{
+    ecs::query::QueryFilter, prelude::*, state::state::FreelyMutableState,
+    world_serialization::WorldInstanceReady,
+};
 
 pub fn enforce_one<T: Component>(
     trigger: On<Add, T>,
@@ -82,3 +85,31 @@ pub fn clear_all<T: Component>(mut commands: Commands, t_query: Query<Entity, Wi
 pub fn log_added_component<T: Component>(trigger: On<Add, T>, mut commands: Commands) {
     commands.entity(trigger.entity).log_components();
 }
+
+/// Stores the first descendant with an [`AnimationPlayer`] when a world asset
+/// instance has finished spawning. Attach this observer to the `WorldAssetRoot`
+/// entity; consumers can then read [`AnimatorEntity`] from that root.
+pub fn register_animator(
+    scene_ready: On<WorldInstanceReady>,
+    mut commands: Commands,
+    children: Query<&Children>,
+    animator_query: Query<(), With<AnimationPlayer>>,
+) {
+    let scene_root = scene_ready.entity;
+    let Some(animator) = children
+        .iter_descendants(scene_root)
+        .find(|&entity| animator_query.contains(entity))
+    else {
+        warn!("no AnimationPlayer descendant found under {scene_root:?}");
+        return;
+    };
+
+    commands.entity(scene_root).insert(AnimatorEntity(animator));
+    commands
+        .entity(animator)
+        .insert(AnimationTransitions::new());
+}
+
+/// The first descendant `AnimationPlayer` found for a spawned world asset.
+#[derive(Component, Copy, Clone, Debug)]
+pub struct AnimatorEntity(pub Entity);

@@ -6,6 +6,7 @@ use bevy::{
     gltf::{GltfPlugin, convert_coordinates::GltfConvertCoordinates},
     prelude::*,
 };
+use bevy_hanabi::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
@@ -18,6 +19,7 @@ use crate::{
     nine::{Nine, NinePlugin},
     status::StatusPlugin,
     symmetra::SymmetraPlugin,
+    systems::register_animator,
     turn::{Cpu, Player, TurnPlugin},
     ui::NineUiPlugin,
     unit::UnitPlugin,
@@ -47,6 +49,7 @@ fn main() {
                 },
                 ..default()
             }),
+            HanabiPlugin,
             NineAssetPlugin,
             FieldPlugin,
             UnitPlugin,
@@ -60,8 +63,8 @@ fn main() {
             SymmetraPlugin,
             StatusPlugin,
             DirectorPlugin,
-            NinePlugin,
         ))
+        .add_plugins((NinePlugin,))
         .insert_resource(MeshPickingSettings {
             require_markers: true,
             ray_cast_visibility: RayCastVisibility::Any,
@@ -91,6 +94,7 @@ fn main() {
             )
                 .chain(),
         )
+        .add_observer(register_animator)
         .run();
 }
 
@@ -157,7 +161,7 @@ fn entry(
     commands.spawn((
         Camera3d::default(),
         MeshPickingCamera,
-        Transform::from_xyz(20.0, 40.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(20.0, 20.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
     let e_cell = cpu_field.cells.get(&HexCoord::new(1, -1)).unwrap();

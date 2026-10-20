@@ -216,7 +216,7 @@ pub fn apply_damage_buffers(
                 });
 
                 if let Some(e_killer) = damage.source {
-                    commands.trigger(KilledSomething {
+                    commands.trigger(KillingSomething {
                         entity: e_killer,
                         killed: e_health,
                     });
@@ -236,7 +236,7 @@ pub struct Dead {
 }
 
 #[derive(EntityEvent)]
-pub struct KilledSomething {
+pub struct KillingSomething {
     pub entity: Entity,
     pub killed: Entity,
 }
