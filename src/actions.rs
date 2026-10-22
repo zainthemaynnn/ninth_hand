@@ -12,7 +12,7 @@ use crate::{
     actions::tags::{FrontTarget, HasSecondaryTarget},
     asset::GameState,
     field::{Field, HexCoord, HighlightedCell, Highlighter, OccupyingCell},
-    turn::{Player, Rival},
+    turn::{Cpu, Player, Rival},
     unit::Unit,
 };
 
@@ -36,6 +36,7 @@ impl Plugin for ActionPlugin {
             .add_observer(highlight_action_owner_cell)
             .add_observer(highlight_front_target_cells)
             .add_observer(add_target_on_click)
+            .add_observer(add_secondary_target_on_click)
             .add_observer(play_primary_target_action)
             .add_observer(highlight_secondary_targets)
             .add_observer(play_secondary_target_action)
@@ -480,6 +481,18 @@ pub fn add_target_on_click(
     commands.entity(trigger.entity).insert(Target);
 }
 
+pub fn add_secondary_target_on_click(
+    trigger: On<Pointer<Click>>,
+    mut commands: Commands,
+    target_query: Query<(), With<SecondTargettable>>,
+) {
+    let Ok(()) = target_query.get(trigger.entity) else {
+        return;
+    };
+
+    commands.entity(trigger.entity).insert(SecondaryTarget);
+}
+
 pub fn play_primary_target_action(
     _trigger: On<Add, Target>,
     mut commands: Commands,
@@ -492,10 +505,11 @@ pub fn play_primary_target_action(
     commands.trigger(Played { entity: e_action });
 }
 
+// TODO: depending on the target, need to pick the right field
 pub fn highlight_secondary_targets(
     trigger: On<Add, Target>,
     mut commands: Commands,
-    field: Res<Field<Player>>,
+    field: Res<Field<Cpu>>,
     target_query: Query<&HexCoord>,
     action_query: Query<(), (With<SelectedAction>, With<HasSecondaryTarget>)>,
 ) {

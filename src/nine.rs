@@ -18,7 +18,7 @@ use crate::{
     status::{Mark, Stacks},
     systems::AnimatorEntity,
     turn::{Killed, Player},
-    unit::{Unit, UnitDesc},
+    unit::{Unit, UnitDesc, UnitModelResource, UnitType},
 };
 
 pub struct NinePlugin;
@@ -26,9 +26,6 @@ pub struct NinePlugin;
 impl Plugin for NinePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<NineKillEffect>()
-            .add_observer(Crush::play)
-            .add_observer(Slap::play)
-            .add_observer(Gaze::play)
             .add_observer(crate::systems::log_added_component::<AnimationPlayer>)
             .add_observer(kill_effect)
             .configure_loading_state(
@@ -152,7 +149,7 @@ pub fn spawn_with_hand(
 pub struct Crush;
 
 impl Crush {
-    fn play(
+    pub fn play(
         _trigger: On<Played>,
         mut commands: Commands,
         _assets: Res<NineAssets>,
@@ -206,7 +203,7 @@ impl Crush {
                 AnimTarget::component::<Transform>(e_hand),
             ))
             .observe(
-                move |trigger: On<AnimCompletedEvent>,
+                move |_trigger: On<AnimCompletedEvent>,
                       mut damage_events: MessageWriter<DamageEvent>,
                       mut commands: Commands| {
                     damage_events.write(DamageEvent {
@@ -245,12 +242,13 @@ impl Crush {
     SingleTarget,
     LineOfSight,
     MultiHit,
+    HasSecondaryTarget,
     CardArt("abyss"),
 )]
 pub struct Slap;
 
 impl Slap {
-    fn play(
+    pub fn play(
         _trigger: On<Played>,
         unit_query: Single<Entity, With<Nine>>,
         target_query: Single<(Entity, &OccupiedByUnit), With<Target>>,
@@ -297,7 +295,7 @@ impl Slap {
 pub struct Gaze;
 
 impl Gaze {
-    fn play(
+    pub fn play(
         _trigger: On<Played>,
         mut commands: Commands,
         target_query: Single<&OccupiedByUnit, With<Target>>,
@@ -391,20 +389,17 @@ impl FromWorld for NineKillEffect {
 pub fn kill_effect(
     trigger: On<KillingSomething>,
     mut commands: Commands,
-    unit_query: Query<&OccupyingCell>,
     kill_effect: Res<NineKillEffect>,
 ) {
-    info!("Activating kill effect");
-    let occupying_cell = unit_query.get(trigger.killed).unwrap();
-    let e_cell = occupying_cell.0;
+    info!("activating kill effect");
     let e_effect = commands
         .spawn(ParticleEffect::new(kill_effect.0.clone()))
         .id();
-    commands.entity(e_cell).add_child(e_effect);
+    commands.entity(trigger.killed).add_child(e_effect);
 
     commands.entity(trigger.killed).observe(
         move |trigger: On<Killed>, mut commands: Commands, unit_query: Query<&Transform>| {
-            info!("Killing");
+            info!("killing");
             let unit_tf = unit_query.get(trigger.entity).unwrap();
             let tween = Tween::new(
                 EaseFunction::QuinticIn,
