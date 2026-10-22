@@ -48,7 +48,13 @@ pub struct NineAssets {
     pub hand_fist: Handle<AnimationClip>,
 }
 
-#[derive(Component)]
+impl UnitModelResource for NineAssets {
+    fn model_handle(&self) -> Handle<WorldAsset> {
+        self.nine.clone()
+    }
+}
+
+#[derive(Component, Default)]
 #[require(
     Unit,
     Player,
@@ -65,6 +71,10 @@ pub struct NineAssets {
     ])),
 )]
 pub struct Nine;
+
+impl UnitType for Nine {
+    type ModelResource = NineAssets;
+}
 
 #[derive(Component, Debug, Clone)]
 pub struct Hand {
@@ -84,30 +94,6 @@ pub struct HandAnimationGraph {
     pub graph_handle: Handle<AnimationGraph>,
     pub idle: AnimationNodeIndex,
     pub fist: AnimationNodeIndex,
-}
-
-pub fn spawn_at_location(
-    In(coord): In<HexCoord>,
-    mut commands: Commands,
-    assets: Res<NineAssets>,
-    field: Res<Field<Player>>,
-) -> Result<Entity> {
-    let Some(e_cell) = field.cells.get(&coord) else {
-        let err = BevyError::new(
-            Severity::Error,
-            format!("coord {:?} not found in field cells", coord),
-        );
-        return Err(err);
-    };
-
-    Ok(commands
-        .spawn((
-            WorldAssetRoot(assets.nine.clone()),
-            Nine,
-            OccupyingCell(*e_cell),
-            Health(1.0),
-        ))
-        .id())
 }
 
 pub fn spawn_with_hand(

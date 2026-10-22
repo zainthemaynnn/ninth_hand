@@ -45,10 +45,10 @@ pub fn apply_damage_events(
 pub fn show_damage_events(
     mut events: MessageReader<DamageEvent>,
     mut text_events: MessageWriter<FloatyTextEvent>,
-    camera_query: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
+    camera_query: Single<(&Camera, &GlobalTransform), With<Camera3d>>,
     transform_query: Query<&GlobalTransform, Without<Camera3d>>,
 ) {
-    let (cam, cam_tf) = camera_query.single().unwrap();
+    let (cam, cam_tf) = camera_query.into_inner();
 
     for DamageEvent {
         damage,

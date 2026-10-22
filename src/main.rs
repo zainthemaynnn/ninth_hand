@@ -18,7 +18,7 @@ use crate::{
     field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
     nine::{Nine, NinePlugin},
     status::StatusPlugin,
-    symmetra::SymmetraPlugin,
+    symmetra::{Symmetra, SymmetraPlugin},
     systems::register_animator,
     turn::{Cpu, Player, TurnPlugin},
     ui::NineUiPlugin,
@@ -60,11 +60,10 @@ fn main() {
             NineUiPlugin,
             DamagePlugin,
             EnemyPlugin,
-            SymmetraPlugin,
             StatusPlugin,
             DirectorPlugin,
         ))
-        .add_plugins((NinePlugin,))
+        .add_plugins((NinePlugin, SymmetraPlugin))
         .insert_resource(MeshPickingSettings {
             require_markers: true,
             ray_cast_visibility: RayCastVisibility::Any,
@@ -87,9 +86,12 @@ fn main() {
                 })
                 .pipe(load_field::<Cpu>),
                 (|| HexCoord::new(0, 0))
-                    // ??? why do I need to annotate this at all?
-                    .pipe::<_, _, Result<Entity>, _>(nine::spawn_at_location)
-                    .pipe(nine::spawn_with_hand),
+                     // ??? why do I need to annotate this at all?
+                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Nine>)
+                     .pipe(nine::spawn_with_hand),
+                (|| HexCoord::new(1, -1))
+                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Symmetra>)
+                    .pipe(|_: In<Result<Entity>>| {}),
                 entry,
             )
                 .chain(),
@@ -141,7 +143,9 @@ fn entry(
     cpu_field: Res<Field<Cpu>>,
     _tf_query: Query<&GlobalTransform>,
     nine_query: Query<Entity, With<Nine>>,
+    symmetra_query: Query<Entity, With<Symmetra>>,
 ) {
+    println!("yeah");
     commands.spawn((
         PointLight {
             shadow_maps_enabled: true,
@@ -188,6 +192,36 @@ fn entry(
 
     let e_nine = nine_query.single().unwrap();
 
-    commands.spawn((crate::nine::Crush, AvailableAction, OwnedByUnit(e_nine)));
-    commands.spawn((crate::nine::Slap, AvailableAction, OwnedByUnit(e_nine)));
+    commands
+        .spawn((crate::nine::Crush, AvailableAction, OwnedByUnit(e_nine)))
+        .observe(crate::nine::Crush::play);
+    commands
+        .spawn((crate::nine::Slap, AvailableAction, OwnedByUnit(e_nine)))
+        .observe(crate::nine::Slap::play);
+
+    let e_symmetra = symmetra_query.single().unwrap();
+
+    commands
+        .spawn((
+            crate::symmetra::SummonRedGlyph,
+            AvailableAction,
+            OwnedByUnit(e_symmetra),
+        ))
+        .observe(crate::symmetra::SummonRedGlyph::play);
+
+    commands
+        .spawn((
+            crate::symmetra::SummonBlueGlyph,
+            AvailableAction,
+            OwnedByUnit(e_symmetra),
+        ))
+        .observe(crate::symmetra::SummonBlueGlyph::play);
+
+    commands
+        .spawn((
+            crate::symmetra::SummonGreenGlyph,
+            AvailableAction,
+            OwnedByUnit(e_symmetra),
+        ))
+        .observe(crate::symmetra::SummonGreenGlyph::play);
 }

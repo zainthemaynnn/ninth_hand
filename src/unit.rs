@@ -318,3 +318,34 @@ pub fn select_unit(
         }
     }
 }
+
+pub fn spawn_at_location<T: UnitType + Default>(
+    In(coord): In<HexCoord>,
+    mut commands: Commands,
+    field: Res<Field<Player>>,
+    assets: Res<T::ModelResource>,
+) -> Result<Entity> {
+    let Some(e_cell) = field.cells.get(&coord) else {
+        let err = BevyError::new(
+            Severity::Error,
+            format!("coord {:?} not found in field cells", coord),
+        );
+        return Err(err);
+    };
+
+    Ok(commands
+        .spawn((
+            T::default(),
+            WorldAssetRoot(assets.model_handle()),
+            OccupyingCell(*e_cell),
+        ))
+        .id())
+}
+
+pub trait UnitModelResource: Resource {
+    fn model_handle(&self) -> Handle<WorldAsset>;
+}
+
+pub trait UnitType: Component {
+    type ModelResource: UnitModelResource;
+}

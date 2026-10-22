@@ -10,14 +10,14 @@ use bevy_asset_loader::prelude::*;
 
 use crate::{
     actions::{
-        Action, CardArt, InPlay, Target,
+        Action, CardArt, InPlay, Played, Target,
         tags::{self, *},
     },
     asset::GameState,
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
     field::{FieldCell, OccupiedByUnit},
     turn::Player,
-    unit::{Unit, UnitDesc},
+    unit::{Unit, UnitDesc, UnitModelResource, UnitType},
 };
 
 pub struct SymmetraPlugin;
@@ -57,19 +57,24 @@ impl<A: Component, T: SimpleGlyph> Plugin for GlyphPlugin<A, T> {
     fn build(&self, app: &mut App) {
         app.init_resource::<HexGlowColor<T>>()
             .add_observer(glyph_on_cell_enter::<T>)
-            .add_observer(place_glyphs_on_action::<A, T>)
             .add_observer(render_glyphs::<T>)
             .add_observer(derender_glyphs::<T>);
     }
 }
 
 #[derive(AssetCollection, Resource)]
-struct SymmetraAssets {
-    #[asset(path = "gltf/symmetra.glb")]
-    pub _model: Handle<Gltf>,
+pub struct SymmetraAssets {
+    #[asset(path = "gltf/symmetra.glb#Scene0")]
+    pub symmetra: Handle<WorldAsset>,
 }
 
-#[derive(Component)]
+impl UnitModelResource for SymmetraAssets {
+    fn model_handle(&self) -> Handle<WorldAsset> {
+        self.symmetra.clone()
+    }
+}
+
+#[derive(Component, Default)]
 #[require(
     Unit,
     Player,
@@ -89,6 +94,10 @@ struct SymmetraAssets {
     ])),
 )]
 pub struct Symmetra;
+
+impl UnitType for Symmetra {
+    type ModelResource = SymmetraAssets;
+}
 
 #[derive(Component)]
 #[require(FieldCell)]
@@ -149,6 +158,16 @@ impl SimpleGlyph for GreenGlyph {
 )]
 pub struct SummonRedGlyph;
 
+impl SummonRedGlyph {
+    pub fn play(
+        trigger: On<Played>,
+        commands: Commands,
+        target_query: Query<Entity, With<Target>>,
+    ) {
+        place_glyphs_on_action::<RedGlyph>(trigger, commands, target_query);
+    }
+}
+
 #[derive(Component)]
 #[require(
 	Action { name: "Blue Glyph", description: "Place blue glyph (CLD 1)" },
@@ -158,6 +177,16 @@ pub struct SummonRedGlyph;
 	CardArt("shapes"),
 )]
 pub struct SummonBlueGlyph;
+
+impl SummonBlueGlyph {
+    pub fn play(
+        trigger: On<Played>,
+        commands: Commands,
+        target_query: Query<Entity, With<Target>>,
+    ) {
+        place_glyphs_on_action::<GreenGlyph>(trigger, commands, target_query);
+    }
+}
 
 #[derive(Component)]
 #[require(
@@ -169,16 +198,21 @@ pub struct SummonBlueGlyph;
 )]
 pub struct SummonGreenGlyph;
 
-pub fn place_glyphs_on_action<A: Component, T: SimpleGlyph + Default>(
-    trigger: On<Add, InPlay>,
+impl SummonGreenGlyph {
+    pub fn play(
+        trigger: On<Played>,
+        commands: Commands,
+        target_query: Query<Entity, With<Target>>,
+    ) {
+        place_glyphs_on_action::<BlueGlyph>(trigger, commands, target_query);
+    }
+}
+
+pub fn place_glyphs_on_action<T: SimpleGlyph + Default>(
+    _trigger: On<Played>,
     mut commands: Commands,
-    action_query: Query<(), With<A>>,
     target_query: Query<Entity, With<Target>>,
 ) {
-    if !action_query.contains(trigger.entity) {
-        return;
-    }
-
     for e_target in target_query {
         commands.entity(e_target).insert(T::default());
     }
@@ -186,10 +220,10 @@ pub fn place_glyphs_on_action<A: Component, T: SimpleGlyph + Default>(
 
 pub fn glyph_on_cell_enter<T: SimpleGlyph>(
     trigger: On<Add, OccupiedByUnit>,
-    cell_query: Query<(&Glyph, &T, &OccupiedByUnit), With<T>>,
+    cell_query: Query<(&Glyph, &OccupiedByUnit), With<T>>,
     mut damage_events: MessageWriter<DamageEvent>,
 ) {
-    let Ok((glyph, _glyph_ty, occupied_by)) = cell_query.get(trigger.entity) else {
+    let Ok((glyph, occupied_by)) = cell_query.get(trigger.entity) else {
         return;
     };
 
