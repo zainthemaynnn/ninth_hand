@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     actions::{Action, tags::*},
+    damage::{Health, HealthCap},
     turn::Cpu,
     unit::{Unit, UnitDesc},
 };
@@ -14,7 +15,9 @@ use crate::{
         name: "Mortal",
         passive: "A useless mortal.",
         flavor: "Yeah, I'm just a guy.",
-    }
+    },
+    Health(999.0),
+    HealthCap(999.0),
 )]
 pub struct Mortal;
 

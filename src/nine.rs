@@ -14,7 +14,7 @@ use crate::{
     actions::{Action, CardArt, Played, SecondaryTarget, Target, tags::*},
     asset::GameState,
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, KillingSomething, Resist},
-    field::{Field, HexCoord, MovementEvent, OccupiedByUnit, OccupyingCell},
+    field::{HexCoord, MovementEvent, OccupiedByUnit},
     status::{Mark, Stacks},
     systems::AnimatorEntity,
     turn::{Killed, Player},

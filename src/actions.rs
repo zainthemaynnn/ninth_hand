@@ -9,10 +9,10 @@ use bevy_tweening::{
 use rand::seq::IteratorRandom;
 
 use crate::{
-    actions::tags::{FrontTarget, HasSecondaryTarget},
+    actions::tags::{CellTarget, FrontTarget, HasSecondaryTarget},
     asset::GameState,
     field::{Field, HexCoord, HighlightedCell, Highlighter, OccupyingCell},
-    turn::{Cpu, Player, Rival},
+    turn::{Cpu, Rival},
     unit::Unit,
 };
 
@@ -24,10 +24,7 @@ impl Plugin for ActionPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<DrawEvent>()
             .add_systems(OnEnter(GameState::InGame), set_action_bar)
-            .add_systems(
-                Update,
-                (update_action_bar, select_deselect_card).run_if(in_state(GameState::InGame)),
-            )
+            .add_systems(Update, (update_action_bar, select_deselect_card))
             .add_observer(select_card_animation)
             .add_observer(deselect_card_animation)
             .add_observer(select_action_on_card_select)
@@ -35,10 +32,11 @@ impl Plugin for ActionPlugin {
             .add_observer(deselect_action_cells_on_deselect)
             .add_observer(highlight_action_owner_cell)
             .add_observer(highlight_front_target_cells)
+            .add_observer(highlight_cell_target_cells)
+            .add_observer(highlight_secondary_target_cells)
             .add_observer(add_target_on_click)
             .add_observer(add_secondary_target_on_click)
             .add_observer(play_primary_target_action)
-            .add_observer(highlight_secondary_targets)
             .add_observer(play_secondary_target_action)
             .add_observer(deselect_played_action)
             .add_observer(discard_card_animation)
@@ -469,6 +467,21 @@ pub fn highlight_front_target_cells(
     }
 }
 
+pub fn highlight_cell_target_cells(
+    trigger: On<Add, SelectedAction>,
+    mut commands: Commands,
+    target_query: Query<(), With<CellTarget>>,
+    field: Res<Field<Cpu>>,
+) {
+    if !target_query.contains(trigger.entity) {
+        return;
+    }
+
+    for e_cell in field.cells.values() {
+        commands.entity(*e_cell).insert(Targettable);
+    }
+}
+
 pub fn add_target_on_click(
     trigger: On<Pointer<Click>>,
     mut commands: Commands,
@@ -506,7 +519,7 @@ pub fn play_primary_target_action(
 }
 
 // TODO: depending on the target, need to pick the right field
-pub fn highlight_secondary_targets(
+pub fn highlight_secondary_target_cells(
     trigger: On<Add, Target>,
     mut commands: Commands,
     field: Res<Field<Cpu>>,

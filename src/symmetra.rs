@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use bevy::{
     asset::RenderAssetUsages,
+    ecs::relationship::Relationship,
     mesh::{Indices, PrimitiveTopology},
     platform::collections::HashMap,
     prelude::*,
@@ -10,7 +11,7 @@ use bevy_asset_loader::prelude::*;
 
 use crate::{
     actions::{
-        Action, CardArt, InPlay, Played, Target,
+        Action, CardArt, OwnedByUnit, Played, Target,
         tags::{self, *},
     },
     asset::GameState,
@@ -163,8 +164,9 @@ impl SummonRedGlyph {
         trigger: On<Played>,
         commands: Commands,
         target_query: Query<Entity, With<Target>>,
+        action_query: Query<&OwnedByUnit>,
     ) {
-        place_glyphs_on_action::<RedGlyph>(trigger, commands, target_query);
+        place_glyphs_on_action::<RedGlyph>(trigger, commands, target_query, action_query);
     }
 }
 
@@ -183,8 +185,9 @@ impl SummonBlueGlyph {
         trigger: On<Played>,
         commands: Commands,
         target_query: Query<Entity, With<Target>>,
+        action_query: Query<&OwnedByUnit>,
     ) {
-        place_glyphs_on_action::<GreenGlyph>(trigger, commands, target_query);
+        place_glyphs_on_action::<BlueGlyph>(trigger, commands, target_query, action_query);
     }
 }
 
@@ -203,18 +206,25 @@ impl SummonGreenGlyph {
         trigger: On<Played>,
         commands: Commands,
         target_query: Query<Entity, With<Target>>,
+        action_query: Query<&OwnedByUnit>,
     ) {
-        place_glyphs_on_action::<BlueGlyph>(trigger, commands, target_query);
+        place_glyphs_on_action::<GreenGlyph>(trigger, commands, target_query, action_query);
     }
 }
 
 pub fn place_glyphs_on_action<T: SimpleGlyph + Default>(
-    _trigger: On<Played>,
+    trigger: On<Played>,
     mut commands: Commands,
     target_query: Query<Entity, With<Target>>,
+    action_query: Query<&OwnedByUnit>,
 ) {
     for e_target in target_query {
-        commands.entity(e_target).insert(T::default());
+        commands.entity(e_target).insert((
+            T::default(),
+            Glyph {
+                owner: action_query.get(trigger.entity).unwrap().get(),
+            },
+        ));
     }
 }
 
@@ -250,7 +260,7 @@ impl FromWorld for HexGlow {
 
         for (i, point) in polygon.vertices(0.0).into_iter().enumerate() {
             vertices.push(point.extend(0.0));
-            vertices.push(point.extend(0.1));
+            vertices.push(point.extend(-1.0));
 
             indices.push(i as u32 * 2);
             indices.push(i as u32 * 2 + 1);
@@ -258,6 +268,12 @@ impl FromWorld for HexGlow {
             colors.push([1.0, 1.0, 1.0, 1.0]);
             colors.push([1.0, 1.0, 1.0, 0.0]);
         }
+
+        indices.push(0u32);
+        indices.push(1u32);
+
+        colors.push([1.0, 1.0, 1.0, 1.0]);
+        colors.push([1.0, 1.0, 1.0, 0.0]);
 
         let mesh = Mesh::new(
             PrimitiveTopology::TriangleStrip,
@@ -280,7 +296,9 @@ impl<T: SimpleGlyph> FromWorld for HexGlowColor<T> {
         let mut materials = world.resource_mut::<Assets<StandardMaterial>>();
         let h_material = materials.add(StandardMaterial {
             base_color: T::damage().ty.color(),
+            alpha_mode: AlphaMode::Blend,
             unlit: true,
+            cull_mode: None,
             ..Default::default()
         });
         Self(h_material, PhantomData)
@@ -293,6 +311,7 @@ pub fn render_glyphs<T: SimpleGlyph>(
     hex_glow: Res<HexGlow>,
     hex_glow_color: Res<HexGlowColor<T>>,
 ) {
+    info!("spawning glyph");
     commands.entity(trigger.entity).with_children(|parent| {
         parent.spawn((
             Mesh3d(hex_glow.0.clone()),

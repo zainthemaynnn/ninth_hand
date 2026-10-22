@@ -325,7 +325,6 @@ pub fn animate_highlighted_cell(
     materials: Res<HighlighterMaterials>,
     highlight_query: Query<&HighlightedCell>,
 ) {
-    info!("highlighting cell");
     let highlight = highlight_query.get(trigger.entity).unwrap();
     commands.entity(trigger.entity).insert(MeshMaterial3d::from(
         materials.0.get(&highlight.ty).unwrap().clone(),

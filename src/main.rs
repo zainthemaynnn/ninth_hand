@@ -12,7 +12,7 @@ use bevy_tweening::TweeningPlugin;
 use crate::{
     actions::{ActionPlugin, AvailableAction, OwnedByUnit},
     asset::{GameState, NineAssetPlugin},
-    damage::{DamagePlugin, Health},
+    damage::DamagePlugin,
     director::DirectorPlugin,
     enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
     field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
@@ -86,9 +86,9 @@ fn main() {
                 })
                 .pipe(load_field::<Cpu>),
                 (|| HexCoord::new(0, 0))
-                     // ??? why do I need to annotate this at all?
-                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Nine>)
-                     .pipe(nine::spawn_with_hand),
+                    // ??? why do I need to annotate this at all?
+                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Nine>)
+                    .pipe(nine::spawn_with_hand),
                 (|| HexCoord::new(1, -1))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Symmetra>)
                     .pipe(|_: In<Result<Entity>>| {}),
@@ -174,7 +174,6 @@ fn entry(
             WorldAssetRoot(enemy_assets.mortal.clone()),
             Mortal,
             OccupyingCell(*e_cell),
-            Health(0.7),
         ))
         .id();
     let e_cell2 = cpu_field.cells.get(&HexCoord::new(0, -3)).unwrap();
@@ -183,7 +182,6 @@ fn entry(
             WorldAssetRoot(enemy_assets.mortal.clone()),
             Mortal,
             OccupyingCell(*e_cell2),
-            Health(0.7),
         ))
         .id();
 
