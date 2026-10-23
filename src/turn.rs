@@ -5,7 +5,7 @@ use bevy_asset_loader::prelude::*;
 use bevy_tweening::{PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
 
 use crate::{
-    actions::{AvailableAction, DrawCount, DrawEvent, draw_actions},
+    actions::{AvailableAction, DrawCount, DrawEvent, SecondaryTarget, Target, draw_actions},
     asset::{GameState, UiRightLens},
     damage::Dead,
     systems::countdown_to_state,
@@ -15,8 +15,10 @@ use crate::{
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, SubStates)]
 #[source(GameState = GameState::InGame)]
 pub enum TurnState {
+    PlayerStart,
     Player,
     PlayerBusy,
+    PlayerDone,
     Cpu,
     CpuBusy,
     #[default]
@@ -34,23 +36,44 @@ impl Plugin for TurnPlugin {
             )
             .add_systems(OnEnter(GameState::InGame), insert_player_turn_button)
             .add_systems(
+                OnEnter(TurnState::PlayerStart),
+                (
+                    (
+                        set_ally_rival::<Player, Cpu>,
+                        show_player_turn_button,
+                        remove_all_available_actions,
+                        shuffle_unit_actions::<Player>.before(draw_actions),
+                    ),
+                    |mut next_state: ResMut<NextState<TurnState>>| {
+                        next_state.set(TurnState::Player);
+                    },
+                )
+                    .chain(),
+            )
+            .add_systems(
+                Update,
+                advance_player_turn_button.run_if(in_state(TurnState::Player)),
+            )
+            .add_systems(
                 OnEnter(TurnState::Player),
                 (
-                    set_ally_rival::<Player, Cpu>,
-                    show_player_turn_button,
-                    remove_all_available_actions,
-                    shuffle_unit_actions::<Player>.before(draw_actions),
+                    crate::systems::clear_all::<Target>,
+                    crate::systems::clear_all::<SecondaryTarget>,
                 ),
             )
             .add_systems(
-                OnEnter(TurnState::PlayerBusy),
+                Update,
+                check_for_player_turn_done.run_if(in_state(TurnState::PlayerBusy)),
+            )
+            .add_systems(
+                OnEnter(TurnState::PlayerDone),
                 (hide_player_turn_button, kill_units::<Cpu>),
             )
             .add_systems(
                 Update,
                 (|| TurnState::Cpu)
                     .pipe(countdown_to_state::<1000, _>)
-                    .run_if(in_state(TurnState::PlayerBusy)),
+                    .run_if(in_state(TurnState::PlayerDone)),
             )
             .add_systems(
                 OnEnter(TurnState::Cpu),
@@ -60,10 +83,6 @@ impl Plugin for TurnPlugin {
                     shuffle_unit_actions::<Cpu>.before(draw_actions),
                     advance_enemy_turn,
                 ),
-            )
-            .add_systems(
-                Update,
-                advance_player_turn_button.run_if(in_state(TurnState::Player)),
             )
             // placeholders for now
             .add_systems(OnEnter(TurnState::Neutral), advance_neutral_turn);
@@ -211,7 +230,7 @@ pub fn advance_player_turn_button(
         let children = children_query.get(e_button).unwrap();
         match *interaction {
             Interaction::Pressed => {
-                next_state.set(TurnState::PlayerBusy);
+                next_state.set(TurnState::PlayerDone);
             }
             Interaction::Hovered => {
                 for e_child in children {
@@ -234,7 +253,7 @@ pub fn advance_enemy_turn(mut next_state: ResMut<NextState<TurnState>>) {
 }
 
 pub fn advance_neutral_turn(mut next_state: ResMut<NextState<TurnState>>) {
-    next_state.set(TurnState::Player);
+    next_state.set(TurnState::PlayerStart);
 }
 
 // dummy turn wait thing
@@ -294,4 +313,18 @@ pub fn kill_units<T: Team>(
 #[derive(EntityEvent)]
 pub struct Killed {
     pub entity: Entity,
+}
+
+/// While this component exists, the turn will be blocked from finishing.
+#[derive(Component, Debug, Default)]
+pub struct TurnHanger;
+
+pub fn check_for_player_turn_done(
+    target_query: Query<(), With<TurnHanger>>,
+    mut next_state: ResMut<NextState<TurnState>>,
+) {
+    if target_query.is_empty() {
+        info!("return to player state");
+        next_state.set(TurnState::Player);
+    }
 }

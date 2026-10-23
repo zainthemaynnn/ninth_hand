@@ -17,7 +17,7 @@ use crate::{
     field::{HexCoord, MovementEvent, OccupiedByUnit},
     status::{Mark, Stacks},
     systems::AnimatorEntity,
-    turn::{Killed, Player},
+    turn::{Killed, Player, TurnHanger},
     unit::{Unit, UnitDesc, UnitModelResource, UnitType},
 };
 
@@ -187,6 +187,7 @@ impl Crush {
             .spawn((
                 TweenAnim::new(tween),
                 AnimTarget::component::<Transform>(e_hand),
+                TurnHanger,
             ))
             .observe(
                 move |_trigger: On<AnimCompletedEvent>,
@@ -210,13 +211,16 @@ impl Crush {
                         },
                     ));
 
-                    commands.spawn((
-                        TweenAnim::new(tween),
-                        AnimTarget::component::<Transform>(e_hand),
-                    ));
-                    // transitions.play(animator.as_mut(), graph.idle, Duration::from_millis(500));
+                    commands
+                        .spawn((
+                            TweenAnim::new(tween),
+                            AnimTarget::component::<Transform>(e_hand),
+                            TurnHanger,
+                        ))
+                        .observe(crate::systems::despawn_tween_entity);
                 },
-            );
+            )
+            .observe(crate::systems::despawn_tween_entity);
     }
 }
 
@@ -243,6 +247,7 @@ impl Slap {
         mut damage_events: MessageWriter<DamageEvent>,
         mut move_events: MessageWriter<MovementEvent>,
     ) {
+        dbg!("slap");
         // man, all this querying is convoluted
         // perhaps there is an easier way to apply movement
         let e_unit = unit_query.into_inner();

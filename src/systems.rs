@@ -4,6 +4,7 @@ use bevy::{
     ecs::query::QueryFilter, prelude::*, state::state::FreelyMutableState,
     world_serialization::WorldInstanceReady,
 };
+use bevy_tweening::AnimCompletedEvent;
 
 pub fn enforce_one<T: Component>(
     trigger: On<Add, T>,
@@ -113,3 +114,7 @@ pub fn register_animator(
 /// The first descendant `AnimationPlayer` found for a spawned world asset.
 #[derive(Component, Copy, Clone, Debug)]
 pub struct AnimatorEntity(pub Entity);
+
+pub fn despawn_tween_entity(trigger: On<AnimCompletedEvent>, mut commands: Commands) {
+    commands.entity(trigger.anim_entity).despawn();
+}

@@ -12,7 +12,7 @@ use crate::{
     actions::tags::{CellTarget, FrontTarget, HasSecondaryTarget},
     asset::GameState,
     field::{Field, HexCoord, HighlightedCell, Highlighter, OccupyingCell},
-    turn::{Cpu, Rival},
+    turn::{Cpu, Rival, TurnState},
     unit::Unit,
 };
 
@@ -24,7 +24,10 @@ impl Plugin for ActionPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<DrawEvent>()
             .add_systems(OnEnter(GameState::InGame), set_action_bar)
-            .add_systems(Update, (update_action_bar, select_deselect_card))
+            .add_systems(
+                Update,
+                (update_action_bar, select_deselect_card).run_if(in_state(GameState::InGame)),
+            )
             .add_observer(select_card_animation)
             .add_observer(deselect_card_animation)
             .add_observer(select_action_on_card_select)
@@ -510,12 +513,14 @@ pub fn play_primary_target_action(
     _trigger: On<Add, Target>,
     mut commands: Commands,
     action_query: Single<(Entity, &Action), (With<SelectedAction>, Without<HasSecondaryTarget>)>,
+    mut next_state: ResMut<NextState<TurnState>>,
 ) {
     let (e_action, action) = action_query.into_inner();
 
     info!("playing primary target action {:?}", action.name);
 
     commands.trigger(Played { entity: e_action });
+    next_state.set(TurnState::PlayerBusy);
 }
 
 // TODO: depending on the target, need to pick the right field
@@ -540,13 +545,15 @@ pub fn highlight_secondary_target_cells(
 pub fn play_secondary_target_action(
     _trigger: On<Add, SecondaryTarget>,
     mut commands: Commands,
-    action_query: Query<Entity, (With<SelectedAction>, With<HasSecondaryTarget>)>,
+    action_query: Single<(Entity, &Action), (With<SelectedAction>, With<HasSecondaryTarget>)>,
+    mut next_state: ResMut<NextState<TurnState>>,
 ) {
-    let Ok(e_action) = action_query.single() else {
-        return;
-    };
+    let (e_action, action) = action_query.into_inner();
+
+    info!("playing secondary target action {:?}", action.name);
 
     commands.trigger(Played { entity: e_action });
+    next_state.set(TurnState::PlayerBusy);
 }
 
 #[derive(EntityEvent)]
