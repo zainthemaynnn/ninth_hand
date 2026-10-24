@@ -1,24 +1,28 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, time::Duration};
 
 use bevy::{
     asset::RenderAssetUsages,
     ecs::relationship::Relationship,
+    gltf::GltfMaterialName,
     mesh::{Indices, PrimitiveTopology},
     platform::collections::HashMap,
     prelude::*,
+    world_serialization::WorldInstanceReady,
 };
 use bevy_asset_loader::prelude::*;
+use bevy_tweening::{AnimTarget, Tween, TweenAnim};
+use rand::RngExt;
 
 use crate::{
     actions::{
         Action, CardArt, OwnedByUnit, Played, Target,
         tags::{self, *},
     },
-    asset::GameState,
+    asset::{GameState, MaterialBaseColorLens},
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
     field::{FieldCell, OccupiedByUnit},
     turn::Player,
-    unit::{Unit, UnitDesc, UnitModelResource, UnitType},
+    unit::{Unit, UnitColor, UnitDesc, UnitModelResource, UnitType},
 };
 
 pub struct SymmetraPlugin;
@@ -33,7 +37,8 @@ impl Plugin for SymmetraPlugin {
             GlyphPlugin::<SummonRedGlyph, RedGlyph>::default(),
             GlyphPlugin::<SummonBlueGlyph, BlueGlyph>::default(),
             GlyphPlugin::<SummonGreenGlyph, GreenGlyph>::default(),
-        ));
+        ))
+        .add_systems(OnEnter(GameState::InGame), update_symmetra_color);
     }
 }
 
@@ -57,6 +62,7 @@ impl<A: Component, T: SimpleGlyph> Default for GlyphPlugin<A, T> {
 impl<A: Component, T: SimpleGlyph> Plugin for GlyphPlugin<A, T> {
     fn build(&self, app: &mut App) {
         app.init_resource::<HexGlowColor<T>>()
+            .init_resource::<HexShape<T>>()
             .add_observer(glyph_on_cell_enter::<T>)
             .add_observer(render_glyphs::<T>)
             .add_observer(derender_glyphs::<T>);
@@ -67,6 +73,8 @@ impl<A: Component, T: SimpleGlyph> Plugin for GlyphPlugin<A, T> {
 pub struct SymmetraAssets {
     #[asset(path = "gltf/symmetra.glb#Scene0")]
     pub symmetra: Handle<WorldAsset>,
+    #[asset(path = "gltf/symmetra.glb#Material0/std")]
+    pub cloak: Handle<StandardMaterial>,
 }
 
 impl UnitModelResource for SymmetraAssets {
@@ -84,6 +92,7 @@ impl UnitModelResource for SymmetraAssets {
         passive: "Every turn, guaranteed to draw a random extra glyph.",
         flavor: "Mortals are stupid. Geometry is not.",
     },
+    UnitColor(Srgba::hex("#C23EA4").unwrap().into()), // #780EC2 accent??
     Health(10.0),
     HealthCap(10.0),
     Resist(HashMap::from([
@@ -101,12 +110,17 @@ impl UnitType for Symmetra {
 }
 
 #[derive(Component)]
+pub struct Cloak(pub Entity);
+
+#[derive(Component)]
 #[require(FieldCell)]
 pub struct Glyph {
     pub owner: Entity,
 }
 
 pub trait SimpleGlyph: Component + Default {
+    const SHAPE_N: u32;
+
     fn damage() -> Damage;
 }
 
@@ -114,6 +128,8 @@ pub trait SimpleGlyph: Component + Default {
 pub struct RedGlyph;
 
 impl SimpleGlyph for RedGlyph {
+    const SHAPE_N: u32 = 4;
+
     fn damage() -> Damage {
         Damage {
             value: 1.0,
@@ -127,6 +143,8 @@ impl SimpleGlyph for RedGlyph {
 pub struct BlueGlyph;
 
 impl SimpleGlyph for BlueGlyph {
+    const SHAPE_N: u32 = 32;
+
     fn damage() -> Damage {
         Damage {
             value: 1.0,
@@ -140,6 +158,8 @@ impl SimpleGlyph for BlueGlyph {
 pub struct GreenGlyph;
 
 impl SimpleGlyph for GreenGlyph {
+    const SHAPE_N: u32 = 3;
+
     fn damage() -> Damage {
         Damage {
             value: 1.0,
@@ -165,8 +185,15 @@ impl SummonRedGlyph {
         commands: Commands,
         target_query: Query<Entity, With<Target>>,
         action_query: Query<&OwnedByUnit>,
+        chroma_query: Query<(&UnitColor, &Chroma)>,
     ) {
-        place_glyphs_on_action::<RedGlyph>(trigger, commands, target_query, action_query);
+        place_glyphs_on_action::<RedGlyph>(
+            trigger,
+            commands,
+            target_query,
+            action_query,
+            chroma_query,
+        );
     }
 }
 
@@ -186,8 +213,15 @@ impl SummonBlueGlyph {
         commands: Commands,
         target_query: Query<Entity, With<Target>>,
         action_query: Query<&OwnedByUnit>,
+        chroma_query: Query<(&UnitColor, &Chroma)>,
     ) {
-        place_glyphs_on_action::<BlueGlyph>(trigger, commands, target_query, action_query);
+        place_glyphs_on_action::<BlueGlyph>(
+            trigger,
+            commands,
+            target_query,
+            action_query,
+            chroma_query,
+        );
     }
 }
 
@@ -207,8 +241,15 @@ impl SummonGreenGlyph {
         commands: Commands,
         target_query: Query<Entity, With<Target>>,
         action_query: Query<&OwnedByUnit>,
+        chroma_query: Query<(&UnitColor, &Chroma)>,
     ) {
-        place_glyphs_on_action::<GreenGlyph>(trigger, commands, target_query, action_query);
+        place_glyphs_on_action::<GreenGlyph>(
+            trigger,
+            commands,
+            target_query,
+            action_query,
+            chroma_query,
+        );
     }
 }
 
@@ -217,14 +258,34 @@ pub fn place_glyphs_on_action<T: SimpleGlyph + Default>(
     mut commands: Commands,
     target_query: Query<Entity, With<Target>>,
     action_query: Query<&OwnedByUnit>,
+    chroma_query: Query<(&UnitColor, &Chroma)>,
 ) {
+    let e_owner = action_query.get(trigger.entity).unwrap().get();
     for e_target in target_query {
-        commands.entity(e_target).insert((
-            T::default(),
-            Glyph {
-                owner: action_query.get(trigger.entity).unwrap().get(),
+        commands
+            .entity(e_target)
+            .insert((T::default(), Glyph { owner: e_owner }));
+
+        let (unit_color, chroma) = chroma_query.get(e_owner).unwrap();
+
+        let tween = Tween::new(
+            EaseFunction::QuadraticOut,
+            Duration::from_millis(100),
+            MaterialBaseColorLens {
+                start: unit_color.0.to_linear(),
+                end: T::damage().ty.color().to_linear(),
+            },
+        )
+        .then(Tween::new(
+            EaseFunction::QuadraticIn,
+            Duration::from_millis(500),
+            MaterialBaseColorLens {
+                start: T::damage().ty.color().to_linear(),
+                end: unit_color.0.to_linear(),
             },
         ));
+
+        commands.entity(chroma.0).insert(TweenAnim::new(tween));
     }
 }
 
@@ -284,7 +345,48 @@ impl FromWorld for HexGlow {
         .with_inserted_indices(Indices::U32(indices));
 
         let hex_glow = meshes.add(mesh);
-        HexGlow(hex_glow)
+        Self(hex_glow)
+    }
+}
+
+#[derive(Resource)]
+pub struct HexShape<T: SimpleGlyph>(pub Handle<Mesh>, PhantomData<T>);
+
+impl<T: SimpleGlyph> FromWorld for HexShape<T> {
+    fn from_world(world: &mut World) -> Self {
+        let mut meshes = world.resource_mut::<Assets<Mesh>>();
+        let inner = RegularPolygon::new(0.25, T::SHAPE_N);
+        let outer = RegularPolygon::new(0.35, T::SHAPE_N);
+
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        let rot = rand::rng().random_range(0.0..std::f32::consts::PI);
+
+        for (i, (p0, p1)) in inner
+            .vertices(rot)
+            .into_iter()
+            .zip(outer.vertices(rot).into_iter())
+            .enumerate()
+        {
+            vertices.push(p0.extend(0.01));
+            vertices.push(p1.extend(0.01));
+
+            indices.push(i as u32 * 2);
+            indices.push(i as u32 * 2 + 1);
+        }
+
+        indices.push(0u32);
+        indices.push(1u32);
+
+        let mesh = Mesh::new(
+            PrimitiveTopology::TriangleStrip,
+            RenderAssetUsages::default(),
+        )
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, vertices)
+        .with_inserted_indices(Indices::U32(indices));
+
+        let hex_shape = meshes.add(mesh);
+        Self(hex_shape, PhantomData)
     }
 }
 
@@ -309,6 +411,7 @@ pub fn render_glyphs<T: SimpleGlyph>(
     trigger: On<Add, T>,
     mut commands: Commands,
     hex_glow: Res<HexGlow>,
+    hex_shape: Res<HexShape<T>>,
     hex_glow_color: Res<HexGlowColor<T>>,
 ) {
     info!("spawning glyph");
@@ -317,10 +420,42 @@ pub fn render_glyphs<T: SimpleGlyph>(
             Mesh3d(hex_glow.0.clone()),
             MeshMaterial3d(hex_glow_color.0.clone()),
         ));
+        parent.spawn((
+            Mesh3d(hex_shape.0.clone()),
+            MeshMaterial3d(hex_glow_color.0.clone()),
+        ));
     });
 }
 
 pub fn derender_glyphs<T: SimpleGlyph>(trigger: On<Remove, T>, mut commands: Commands) {
     // TODO: despawn specifically this child I'm too lazy to write it
     commands.entity(trigger.entity).despawn_children();
+}
+
+#[derive(Component, Debug)]
+pub struct Chroma(pub Entity);
+
+pub fn setup_symmetra_model(
+    trigger: On<WorldInstanceReady>,
+    mut commands: Commands,
+    children_query: Query<&Children>,
+    name_query: Query<&GltfMaterialName>,
+    material_query: Query<&MeshMaterial3d<StandardMaterial>>,
+) {
+    let e_cloak =
+        crate::systems::find_named_material(trigger.entity, "cloak", &children_query, &name_query)
+            .unwrap();
+    let e_anim = commands
+        .spawn(AnimTarget::asset(material_query.get(e_cloak).unwrap().id()))
+        .id();
+    commands.entity(trigger.entity).insert(Chroma(e_anim));
+}
+
+pub fn update_symmetra_color(
+    assets: Res<SymmetraAssets>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    info!("shift");
+    let mut material = materials.get_mut(assets.cloak.id()).unwrap();
+    material.base_color = Srgba::hex("#C23EA4").unwrap().into();
 }

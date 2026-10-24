@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{ecs::relationship::Relationship, platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_tweening::{
     AnimCompletedEvent, AnimTarget, PlaybackDirection, PlaybackState, Tween, TweenAnim, Tweenable,
@@ -12,8 +12,8 @@ use crate::{
     actions::tags::{CellTarget, FrontTarget, HasSecondaryTarget},
     asset::GameState,
     field::{Field, HexCoord, HighlightedCell, Highlighter, OccupyingCell},
-    turn::{Cpu, Rival, TurnState},
-    unit::Unit,
+    turn::{Cpu, Player, Rival, TurnState},
+    unit::{Unit, UnitDesc},
 };
 
 const CARD_STICKOUT: Val = Val::Percent(50.0);
@@ -28,8 +28,8 @@ impl Plugin for ActionPlugin {
                 Update,
                 (update_action_bar, select_deselect_card).run_if(in_state(GameState::InGame)),
             )
-            .add_observer(select_card_animation)
-            .add_observer(deselect_card_animation)
+            .add_observer(select_card_animation.run_if(in_state(TurnState::Player)))
+            .add_observer(deselect_card_animation.run_if(in_state(TurnState::Player)))
             .add_observer(select_action_on_card_select)
             .add_observer(deselect_action_on_card_deselect)
             .add_observer(deselect_action_cells_on_deselect)
@@ -179,7 +179,9 @@ pub struct CardArt(pub &'static str);
 #[derive(AssetCollection, Resource)]
 pub struct CardAssets {
     #[asset(path = "img/card_art", collection(typed, mapped))]
-    pub backgrounds: HashMap<AssetFileStem, Handle<Image>>,
+    pub card_art: HashMap<AssetFileStem, Handle<Image>>,
+    #[asset(path = "img/patterns/nineslice", collection(typed, mapped))]
+    pub patterns: HashMap<AssetFileStem, Handle<Image>>,
 }
 
 /// The `Action` owning this card.
@@ -232,10 +234,23 @@ pub struct InPlay;
 #[derive(Component, Debug, Default)]
 pub struct Discarded;
 
-pub fn set_action_bar(mut commands: Commands) {
-    commands.spawn((
-        ActionBar,
-        Node {
+/// The `Unit` owning this action.
+#[derive(Component, Debug)]
+#[relationship(relationship_target = UnitOwnsActionBar)]
+pub struct ActionBarOwnedByUnit(pub Entity);
+
+/// The `Action`s owned by this unit.
+#[derive(Component, Debug)]
+#[relationship_target(relationship = ActionBarOwnedByUnit)]
+pub struct UnitOwnsActionBar(Entity);
+
+pub fn set_action_bar(
+    mut commands: Commands,
+    assets: Res<CardAssets>,
+    unit_query: Query<(Entity, &UnitDesc), With<Player>>,
+) {
+    commands
+        .spawn(Node {
             position_type: PositionType::Absolute,
             bottom: Val::Percent(0.0),
             width: Val::Percent(100.0),
@@ -243,23 +258,51 @@ pub fn set_action_bar(mut commands: Commands) {
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::Center,
             justify_content: JustifyContent::SpaceEvenly,
-            padding: UiRect::all(Val::Px(10.0)),
             ..Default::default()
-        },
-        BackgroundColor(Color::BLACK.with_alpha(0.2)),
-    ));
+        })
+        .with_children(move |parent| {
+            for (e_unit, UnitDesc { name, .. }) in unit_query {
+                let slicer = TextureSlicer {
+                    border: BorderRect::all(20.0),
+                    center_scale_mode: SliceScaleMode::Tile { stretch_value: 1.0 },
+                    sides_scale_mode: SliceScaleMode::Tile { stretch_value: 1.0 },
+                    ..Default::default()
+                };
+                parent.spawn((
+                    ActionBar,
+                    Node {
+                        bottom: Val::Percent(0.0),
+                        width: Val::Percent(100.0),
+                        height: Val::Percent(100.0),
+                        flex_direction: FlexDirection::Row,
+                        align_items: AlignItems::Center,
+                        justify_content: JustifyContent::SpaceEvenly,
+                        ..Default::default()
+                    },
+                    ImageNode {
+                        image: assets
+                            .patterns
+                            .get(name.to_lowercase().as_str())
+                            .unwrap()
+                            .clone(),
+                        image_mode: NodeImageMode::Sliced(slicer),
+                        ..Default::default()
+                    },
+                    ActionBarOwnedByUnit(e_unit),
+                ));
+            }
+        });
 }
 
 pub fn update_action_bar(
     mut commands: Commands,
     card_assets: Res<CardAssets>,
-    q_bar: Query<Entity, With<ActionBar>>,
-    q_actions: Query<(Entity, &Action, &CardArt), Added<AvailableAction>>,
+    actions_query: Query<(Entity, &Action, &CardArt, &OwnedByUnit), Added<AvailableAction>>,
+    action_bar_query: Query<&UnitOwnsActionBar>,
 ) {
-    let e_bar = q_bar.single().unwrap();
-
-    for (e_action, action, card_art) in q_actions {
-        commands.entity(e_bar).with_children(|parent| {
+    for (e_action, action, card_art, owned_by) in actions_query {
+        let owns = action_bar_query.get(owned_by.get()).unwrap();
+        commands.entity(owns.0).with_children(|parent| {
             let mut selection_tween = TweenAnim::new(Tween::new(
                 EaseFunction::QuadraticOut,
                 Duration::from_millis(2000),
@@ -287,7 +330,7 @@ pub fn update_action_bar(
                         border_radius: BorderRadius::all(Val::Px(16.0)),
                         ..Default::default()
                     },
-                    ImageNode::new(card_assets.backgrounds.get(card_art.0).unwrap().clone()),
+                    ImageNode::new(card_assets.card_art.get(card_art.0).unwrap().clone()),
                     Interaction::default(),
                     UiTransform::default(),
                     selection_tween,

@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{color::palettes, platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::prelude::*;
 use bevy_hanabi::prelude::*;
 use bevy_tweening::{
@@ -18,7 +18,7 @@ use crate::{
     status::{Mark, Stacks},
     systems::AnimatorEntity,
     turn::{Killed, Player, TurnHanger},
-    unit::{Unit, UnitDesc, UnitModelResource, UnitType},
+    unit::{Unit, UnitColor, UnitDesc, UnitModelResource, UnitType},
 };
 
 pub struct NinePlugin;
@@ -63,6 +63,7 @@ impl UnitModelResource for NineAssets {
         passive: "When killing an enemy, gets an additional action.",
         flavor: "MUAHAHAHAHA",
     },
+    UnitColor(palettes::basic::BLACK.into()),
     Health(10.0),
     HealthCap(10.0),
     Resist(HashMap::from([

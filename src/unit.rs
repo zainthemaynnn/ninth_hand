@@ -349,3 +349,6 @@ pub trait UnitModelResource: Resource {
 pub trait UnitType: Component {
     type ModelResource: UnitModelResource;
 }
+
+#[derive(Component, Debug, Clone)]
+pub struct UnitColor(pub Color);

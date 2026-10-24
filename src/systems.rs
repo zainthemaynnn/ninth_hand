@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use bevy::{
-    ecs::query::QueryFilter, prelude::*, state::state::FreelyMutableState,
+    ecs::query::QueryFilter, gltf::GltfMaterialName, prelude::*, state::state::FreelyMutableState,
     world_serialization::WorldInstanceReady,
 };
 use bevy_tweening::AnimCompletedEvent;
@@ -117,4 +117,34 @@ pub struct AnimatorEntity(pub Entity);
 
 pub fn despawn_tween_entity(trigger: On<AnimCompletedEvent>, mut commands: Commands) {
     commands.entity(trigger.anim_entity).despawn();
+}
+
+pub fn find_named_node(
+    e_scene: Entity,
+    name: &str,
+    children_query: &Query<&Children>,
+    name_query: &Query<&Name>,
+) -> Option<Entity> {
+    children_query
+        .iter_descendants(e_scene)
+        .find(move |e_node| {
+            name_query
+                .get(*e_node)
+                .is_ok_and(|node_name| node_name.as_str() == name)
+        })
+}
+
+pub fn find_named_material(
+    e_scene: Entity,
+    name: &str,
+    children_query: &Query<&Children>,
+    name_query: &Query<&GltfMaterialName>,
+) -> Option<Entity> {
+    children_query
+        .iter_descendants(e_scene)
+        .find(move |e_node| {
+            name_query
+                .get(*e_node)
+                .is_ok_and(|node_name| node_name.0.as_str() == name)
+        })
 }

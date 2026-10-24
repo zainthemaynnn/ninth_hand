@@ -27,8 +27,19 @@ pub struct MaterialEmissiveLens {
 
 impl Lens<StandardMaterial> for MaterialEmissiveLens {
     fn lerp(&mut self, mut target: Mut<StandardMaterial>, ratio: f32) {
-        debug!(ratio);
         target.emissive = self.start.lerp(self.end, ratio);
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct MaterialBaseColorLens {
+    pub start: LinearRgba,
+    pub end: LinearRgba,
+}
+
+impl Lens<StandardMaterial> for MaterialBaseColorLens {
+    fn lerp(&mut self, mut target: Mut<StandardMaterial>, ratio: f32) {
+        target.base_color = self.start.lerp(self.end, ratio).into();
     }
 }
 

@@ -139,7 +139,7 @@ pub struct HexMesh(pub Handle<Mesh>);
 impl FromWorld for HexMesh {
     fn from_world(world: &mut World) -> Self {
         let hex_2d = RegularPolygon::new(0.5, 6);
-        let hex_mesh = ExtrusionBuilder::new(&hex_2d, 0.1);
+        let hex_mesh = ExtrusionBuilder::new(&hex_2d, -0.1);
 
         let mut meshes = world.resource_mut::<Assets<Mesh>>();
         let handle = meshes.add(hex_mesh);

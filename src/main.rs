@@ -1,5 +1,6 @@
 #![feature(more_float_constants)]
 #![feature(vec_try_remove)]
+#![feature(const_trait_impl)]
 
 use bevy::{
     color::palettes::css::SILVER,
@@ -91,8 +92,12 @@ fn main() {
                     .pipe(nine::spawn_with_hand),
                 (|| HexCoord::new(1, -1))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Symmetra>)
-                    .pipe(|_: In<Result<Entity>>| {}),
-                entry,
+                    .pipe(|e_symmetra: In<Result<Entity>>, mut commands: Commands| {
+                        commands
+                            .entity(*e_symmetra.as_ref().unwrap())
+                            .observe(symmetra::setup_symmetra_model);
+                    }),
+                entry.before(actions::set_action_bar),
             )
                 .chain(),
         )
@@ -160,12 +165,13 @@ fn entry(
     commands.spawn((
         Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0).subdivisions(10))),
         MeshMaterial3d(materials.add(Color::from(SILVER))),
+        Transform::from_translation(Vec3::new(0.0, -1.0, 0.0)),
     ));
 
     commands.spawn((
         Camera3d::default(),
         MeshPickingCamera,
-        Transform::from_xyz(20.0, 20.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_xyz(24.0, 24.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
     let e_cell = cpu_field.cells.get(&HexCoord::new(1, -1)).unwrap();
