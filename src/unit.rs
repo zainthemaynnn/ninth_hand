@@ -2,7 +2,7 @@ use bevy::{color::palettes, math::VectorSpace, prelude::*};
 
 use crate::{
     actions::DrawCount,
-    asset::GameState,
+    asset::{AnimatorInitializer, GameState},
     damage::{DamageAssets, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
     field::{Field, HexCoord, HoveredCell, MovementStack, OccupiedByUnit, OccupyingCell},
     systems::enforce_one,
@@ -324,6 +324,7 @@ pub fn spawn_at_location<T: UnitType + Default>(
     mut commands: Commands,
     field: Res<Field<Player>>,
     assets: Res<T::ModelResource>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
 ) -> Result<Entity> {
     let Some(e_cell) = field.cells.get(&coord) else {
         let err = BevyError::new(
@@ -333,11 +334,18 @@ pub fn spawn_at_location<T: UnitType + Default>(
         return Err(err);
     };
 
+    let mut graph = AnimationGraph::new();
+    let animations = T::Animations::new(&assets, &mut graph);
+
     Ok(commands
         .spawn((
             T::default(),
             WorldAssetRoot(assets.model_handle()),
             OccupyingCell(*e_cell),
+            AnimatorInitializer {
+                graph: graphs.add(graph),
+                idle: animations.idle(),
+            },
         ))
         .id())
 }
@@ -346,8 +354,15 @@ pub trait UnitModelResource: Resource {
     fn model_handle(&self) -> Handle<WorldAsset>;
 }
 
+pub trait UnitAnimations: Component {
+    type Assets: UnitModelResource;
+    fn new(assets: &Self::Assets, graph: &mut AnimationGraph) -> Self;
+    fn idle(&self) -> Option<Vec<AnimationNodeIndex>>;
+}
+
 pub trait UnitType: Component {
     type ModelResource: UnitModelResource;
+    type Animations: UnitAnimations<Assets = Self::ModelResource>;
 }
 
 #[derive(Component, Debug, Clone)]

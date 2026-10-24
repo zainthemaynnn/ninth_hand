@@ -12,13 +12,12 @@ use bevy_tweening::{
 
 use crate::{
     actions::{Action, CardArt, Played, SecondaryTarget, Target, tags::*},
-    asset::GameState,
+    asset::{AnimatorEntity, AnimatorInitializer, GameState},
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, KillingSomething, Resist},
     field::{HexCoord, MovementEvent, OccupiedByUnit},
     status::{Mark, Stacks},
-    systems::AnimatorEntity,
     turn::{Killed, Player, TurnHanger},
-    unit::{Unit, UnitColor, UnitDesc, UnitModelResource, UnitType},
+    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitType},
 };
 
 pub struct NinePlugin;
@@ -54,6 +53,21 @@ impl UnitModelResource for NineAssets {
     }
 }
 
+#[derive(Component)]
+pub struct NineAnimations {}
+
+impl UnitAnimations for NineAnimations {
+    type Assets = NineAssets;
+
+    fn new(_assets: &Self::Assets, _graph: &mut AnimationGraph) -> Self {
+        Self {}
+    }
+
+    fn idle(&self) -> Option<Vec<AnimationNodeIndex>> {
+        None
+    }
+}
+
 #[derive(Component, Default)]
 #[require(
     Unit,
@@ -75,6 +89,7 @@ pub struct Nine;
 
 impl UnitType for Nine {
     type ModelResource = NineAssets;
+    type Animations = NineAnimations;
 }
 
 #[derive(Component, Debug, Clone)]
@@ -92,7 +107,6 @@ pub struct OwnsHand(Entity);
 
 #[derive(Component)]
 pub struct HandAnimationGraph {
-    pub graph_handle: Handle<AnimationGraph>,
     pub idle: AnimationNodeIndex,
     pub fist: AnimationNodeIndex,
 }
@@ -110,16 +124,17 @@ pub fn spawn_with_hand(
     let mut graph = AnimationGraph::new();
     let idle = graph.add_clip(assets.hand_float.clone(), 1.0, graph.root);
     let fist = graph.add_clip(assets.hand_fist.clone(), 1.0, graph.root);
+    let roll = graph.add_clip(assets.hand_roll.clone(), 1.0, graph.root);
     commands.spawn((
         Hand {
             rest_position: Transform::default(),
         },
         WorldAssetRoot(assets.hand.clone()),
         HandOwnedBy(e_nine),
-        HandAnimationGraph {
-            graph_handle: graphs.add(graph),
-            idle,
-            fist,
+        HandAnimationGraph { idle, fist },
+        AnimatorInitializer {
+            graph: graphs.add(graph),
+            idle: Some(vec![idle, roll]),
         },
     ));
 }
@@ -179,6 +194,7 @@ impl Crush {
             },
         ));
 
+        commands.entity(*e_animator).log_components();
         transitions.play(animator.as_mut(), graph.fist, Duration::from_millis(500));
 
         let target_tf = (*target_tf).clone();

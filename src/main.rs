@@ -20,7 +20,6 @@ use crate::{
     nine::{Nine, NinePlugin},
     status::StatusPlugin,
     symmetra::{Symmetra, SymmetraPlugin},
-    systems::register_animator,
     turn::{Cpu, Player, TurnPlugin},
     ui::NineUiPlugin,
     unit::UnitPlugin,
@@ -101,7 +100,6 @@ fn main() {
             )
                 .chain(),
         )
-        .add_observer(register_animator)
         .run();
 }
 

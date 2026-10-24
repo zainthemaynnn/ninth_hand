@@ -22,7 +22,7 @@ use crate::{
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
     field::{FieldCell, OccupiedByUnit},
     turn::Player,
-    unit::{Unit, UnitColor, UnitDesc, UnitModelResource, UnitType},
+    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitType},
 };
 
 pub struct SymmetraPlugin;
@@ -75,11 +75,32 @@ pub struct SymmetraAssets {
     pub symmetra: Handle<WorldAsset>,
     #[asset(path = "gltf/symmetra.glb#Material0/std")]
     pub cloak: Handle<StandardMaterial>,
+    #[asset(path = "gltf/symmetra.glb#Animation0")]
+    pub idle: Handle<AnimationClip>,
 }
 
 impl UnitModelResource for SymmetraAssets {
     fn model_handle(&self) -> Handle<WorldAsset> {
         self.symmetra.clone()
+    }
+}
+
+#[derive(Component)]
+pub struct SymmetraAnimations {
+    pub idle: AnimationNodeIndex,
+}
+
+impl UnitAnimations for SymmetraAnimations {
+    type Assets = SymmetraAssets;
+
+    fn new(assets: &Self::Assets, graph: &mut AnimationGraph) -> Self {
+        Self {
+            idle: graph.add_clip(assets.idle.clone(), 1.0, graph.root),
+        }
+    }
+
+    fn idle(&self) -> Option<Vec<AnimationNodeIndex>> {
+        Some(vec![self.idle])
     }
 }
 
@@ -107,6 +128,7 @@ pub struct Symmetra;
 
 impl UnitType for Symmetra {
     type ModelResource = SymmetraAssets;
+    type Animations = SymmetraAnimations;
 }
 
 #[derive(Component)]
