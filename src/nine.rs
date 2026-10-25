@@ -1,9 +1,12 @@
 use std::{
-    f32::consts::{FRAC_PI_3, FRAC_PI_6, TAU},
+    f32::consts::{FRAC_PI_3, FRAC_PI_6, PI, TAU},
     time::Duration,
 };
 
-use bevy::{color::palettes, platform::collections::HashMap, prelude::*};
+use bevy::{
+    color::palettes, platform::collections::HashMap, prelude::*,
+    world_serialization::WorldInstanceReady,
+};
 use bevy_asset_loader::prelude::*;
 use bevy_hanabi::prelude::*;
 use bevy_tweening::{
@@ -25,6 +28,7 @@ pub struct NinePlugin;
 impl Plugin for NinePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<NineKillEffect>()
+            .init_resource::<NineSmokeEffect>()
             .add_observer(kill_effect)
             .configure_loading_state(
                 LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
@@ -46,6 +50,8 @@ pub struct NineAssets {
     pub hand_roll: Handle<AnimationClip>,
     #[asset(path = "gltf/hand.glb#Animation0")]
     pub hand_fist: Handle<AnimationClip>,
+    #[asset(path = "img/particles/kenney/PNG (Transparent)/circle_05.png")]
+    pub smoke: Handle<Image>,
 }
 
 impl UnitModelResource for NineAssets {
@@ -126,6 +132,29 @@ pub fn spawn_with_hand(
     let Ok(e_nine) = e_nine_result else {
         return;
     };
+
+    commands.entity(e_nine).observe(
+        |trigger: On<WorldInstanceReady>,
+         mut commands: Commands,
+         children_query: Query<&Children>,
+         name_query: Query<&Name>,
+         smoke: Res<NineSmokeEffect>,
+         assets: Res<NineAssets>| {
+            let e_head = crate::systems::find_named_node(
+                trigger.entity,
+                "Cloak",
+                &children_query,
+                &name_query,
+            )
+            .unwrap();
+            commands.entity(e_head).insert((
+                ParticleEffect::new(smoke.0.clone()),
+                EffectMaterial {
+                    images: vec![assets.smoke.clone()],
+                },
+            ));
+        },
+    );
 
     let mut graph = AnimationGraph::new();
     let idle = graph.add_clip(assets.hand_float.clone(), 1.0, graph.root);
@@ -348,6 +377,67 @@ pub struct Swallow;
 impl Swallow {
     fn _play() {
         todo!();
+    }
+}
+
+#[derive(Resource)]
+pub struct NineSmokeEffect(pub Handle<EffectAsset>);
+
+impl FromWorld for NineSmokeEffect {
+    fn from_world(world: &mut World) -> Self {
+        let mut effects = world.resource_mut::<Assets<EffectAsset>>();
+
+        let writer = ExprWriter::new();
+
+        let angle = writer.rand(ScalarType::Float) * writer.lit(TAU);
+
+        let max_radius = writer.lit(0.4);
+        let r = writer.rand(ScalarType::Float).sqrt() * max_radius.clone();
+
+        let x = r.clone() * angle.clone().cos();
+        let y = writer.lit(-0.4);
+        let z = r.clone() * angle.sin();
+        let position = x.vec3(y, z).expr();
+
+        let initial_angle = r * writer.lit((PI / 36.0) / 0.4);
+        let velocity_x = initial_angle.clone().sin();
+        let velocity_y = initial_angle.cos() * writer.lit(-1.0);
+        let velocity = velocity_x.vec3(velocity_y, writer.lit(0.0)).expr();
+
+        let init_pos = SetAttributeModifier::new(Attribute::POSITION, position);
+        let init_velocity = SetAttributeModifier::new(Attribute::VELOCITY, velocity);
+        let init_age = SetAttributeModifier::new(Attribute::AGE, writer.lit(0.0).expr());
+        let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, writer.lit(3.0).expr());
+        let init_color = SetAttributeModifier::new(
+            Attribute::COLOR,
+            writer.lit(LinearRgba::BLACK.as_u32()).expr(),
+        );
+        let init_size = SetAttributeModifier::new(Attribute::SIZE, writer.lit(0.8).expr());
+        // let drag = AccelModifier::new(writer.lit(Vec3::new(0.0, 0.0, 0.1)).expr());
+
+        let texture_slot = writer.lit(0u32).expr();
+        let mut module = writer.finish();
+        module.add_texture_slot("smoke");
+
+        let mut color_gradient = bevy_hanabi::Gradient::new();
+        color_gradient.add_key(0.0, Vec4::new(0.0, 0.0, 0.0, 1.0));
+        color_gradient.add_key(1.0, Vec4::ZERO);
+
+        let h_effect = effects.add(
+            EffectAsset::new(4096, SpawnerSettings::rate(100.0.into()), module)
+                .with_name("NineSmoke")
+                .init(init_pos)
+                .init(init_velocity)
+                .init(init_age)
+                .init(init_lifetime)
+                .init(init_color)
+                .init(init_size)
+                .with_simulation_space(SimulationSpace::Local)
+                .add_render_modifier(Box::new(ParticleTextureModifier::new(texture_slot)))
+                .add_render_modifier(Box::new(ColorOverLifetimeModifier::new(color_gradient))), // .update(drag),
+        );
+
+        Self(h_effect)
     }
 }
 

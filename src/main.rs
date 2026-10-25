@@ -98,7 +98,7 @@ fn main() {
                             .entity(*e_symmetra.as_ref().unwrap())
                             .observe(symmetra::setup_symmetra_model);
                     }),
-                (|| HexCoord::new(1, -1))
+                (|| HexCoord::new(-2, 1))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Impi>)
                     .pipe(|_in: In<Result<Entity>>| {}),
                 entry.before(actions::set_action_bar),

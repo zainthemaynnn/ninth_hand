@@ -84,10 +84,6 @@ pub fn shuffle_selected_actions(
     {
         let owns_action = collection_query.get(*e_unit).unwrap();
 
-        for e_action in &owns_action.0 {
-            commands.entity(*e_action).log_components();
-        }
-
         let selected_actions = owns_action.iter().sample(&mut rng, *amount);
 
         for e_action in selected_actions {
