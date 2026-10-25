@@ -5,7 +5,9 @@ use bevy_asset_loader::prelude::*;
 use bevy_tweening::{PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
 
 use crate::{
-    actions::{AvailableAction, DrawCount, DrawEvent, SecondaryTarget, Target, draw_actions},
+    actions::{
+        AvailableAction, DrawCount, DrawEvent, SecondaryTarget, Target, shuffle_selected_actions,
+    },
     asset::{GameState, UiRightLens},
     damage::Dead,
     systems::countdown_to_state,
@@ -19,8 +21,10 @@ pub enum TurnState {
     Player,
     PlayerBusy,
     PlayerDone,
+    CpuStart,
     Cpu,
     CpuBusy,
+    CpuDone,
     #[default]
     Neutral,
     NeutralBusy,
@@ -41,8 +45,7 @@ impl Plugin for TurnPlugin {
                     (
                         set_ally_rival::<Player, Cpu>,
                         show_player_turn_button,
-                        remove_all_available_actions,
-                        shuffle_unit_actions::<Player>.before(draw_actions),
+                        (draw_actions::<Player>, shuffle_selected_actions).chain(),
                     ),
                     |mut next_state: ResMut<NextState<TurnState>>| {
                         next_state.set(TurnState::Player);
@@ -67,21 +70,28 @@ impl Plugin for TurnPlugin {
             )
             .add_systems(
                 OnEnter(TurnState::PlayerDone),
-                (hide_player_turn_button, kill_units::<Cpu>),
+                (
+                    hide_player_turn_button,
+                    kill_units::<Cpu>,
+                    remove_all_available_actions,
+                ),
             )
             .add_systems(
                 Update,
-                (|| TurnState::Cpu)
+                (|| TurnState::CpuStart)
                     .pipe(countdown_to_state::<1000, _>)
                     .run_if(in_state(TurnState::PlayerDone)),
             )
             .add_systems(
-                OnEnter(TurnState::Cpu),
+                OnEnter(TurnState::CpuStart),
                 (
                     set_ally_rival::<Cpu, Player>,
                     remove_all_available_actions,
-                    shuffle_unit_actions::<Cpu>.before(draw_actions),
-                    advance_enemy_turn,
+                    (draw_actions::<Cpu>, shuffle_selected_actions).chain(),
+                    // advance_enemy_turn,
+                    |mut next_state: ResMut<NextState<TurnState>>| {
+                        next_state.set(TurnState::Cpu);
+                    },
                 ),
             )
             // placeholders for now
@@ -289,11 +299,13 @@ pub fn remove_all_available_actions(
     }
 }
 
-pub fn shuffle_unit_actions<T: Team>(
+pub fn draw_actions<T: Team>(
     mut draw_events: MessageWriter<DrawEvent>,
     collection_query: Query<(Entity, &DrawCount), With<T>>,
 ) {
+    info!("drawing...");
     for (e_unit, draw_count) in collection_query {
+        info!("{:?}", draw_count);
         draw_events.write(DrawEvent {
             amount: draw_count.amount,
             unit: e_unit,
@@ -326,5 +338,15 @@ pub fn check_for_player_turn_done(
     if target_query.is_empty() {
         info!("return to player state");
         next_state.set(TurnState::Player);
+    }
+}
+
+pub fn check_for_cpu_turn_done(
+    target_query: Query<(), With<TurnHanger>>,
+    mut next_state: ResMut<NextState<TurnState>>,
+) {
+    if target_query.is_empty() {
+        info!("return to player state");
+        next_state.set(TurnState::Cpu);
     }
 }

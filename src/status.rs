@@ -3,9 +3,9 @@ use std::marker::PhantomData;
 use bevy::{color::palettes, prelude::*};
 
 use crate::{
-    actions::{DrawCount, DrawEvent, draw_actions},
+    actions::{DrawCount, DrawEvent, shuffle_selected_actions},
     damage::{Damage, DamageEvent, DamageVariant, apply_damage_events},
-    turn::{Cpu, Player, TurnState, shuffle_unit_actions},
+    turn::{Cpu, Player, TurnState, draw_actions},
 };
 
 pub struct StatusPlugin;
@@ -21,13 +21,21 @@ impl Plugin for StatusPlugin {
             ),
         )
         .add_systems(
+            OnEnter(TurnState::PlayerStart),
+            apply_daze
+                .after(draw_actions::<Player>)
+                .before(shuffle_selected_actions),
+        )
+        .add_systems(
+            OnEnter(TurnState::CpuStart),
+            apply_daze
+                .after(draw_actions::<Cpu>)
+                .before(shuffle_selected_actions),
+        )
+        .add_systems(
             Update,
             (
                 apply_marks.before(apply_damage_events),
-                apply_daze
-                    .after(shuffle_unit_actions::<Player>)
-                    .after(shuffle_unit_actions::<Cpu>)
-                    .before(draw_actions),
                 remove_expired_effects::<Burn>,
                 remove_expired_effects::<Frostbite>,
                 remove_expired_effects::<Affliction>,

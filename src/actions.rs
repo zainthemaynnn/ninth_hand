@@ -13,7 +13,7 @@ use crate::{
     asset::GameState,
     field::{Field, HexCoord, HighlightedCell, Highlighter, OccupyingCell},
     turn::{Cpu, Player, Rival, TurnState},
-    unit::{Unit, UnitDesc},
+    unit::{Unit, UnitDesc, UnitPriority},
 };
 
 const CARD_STICKOUT: Val = Val::Percent(50.0);
@@ -55,22 +55,26 @@ pub struct Action {
     pub description: &'static str,
 }
 
+pub trait ActionType {
+    fn play() -> Observer;
+}
+
 #[derive(Message)]
 pub struct DrawEvent {
     pub amount: usize,
     pub unit: Entity,
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct DrawCount {
     pub amount: usize,
 }
 
-pub fn draw_actions(
+pub fn shuffle_selected_actions(
     mut commands: Commands,
     mut draw_events: MessageReader<DrawEvent>,
     collection_query: Query<&OwnsAction>,
-    available_query: Query<(), With<AvailableAction>>,
+    action_query: Query<&Action>,
 ) {
     let mut rng = rand::rng();
     for DrawEvent {
@@ -80,12 +84,17 @@ pub fn draw_actions(
     {
         let owns_action = collection_query.get(*e_unit).unwrap();
 
-        let selected_actions = owns_action
-            .iter()
-            .filter(|e_action| !available_query.contains(*e_action))
-            .sample(&mut rng, *amount);
+        for e_action in &owns_action.0 {
+            commands.entity(*e_action).log_components();
+        }
+
+        let selected_actions = owns_action.iter().sample(&mut rng, *amount);
 
         for e_action in selected_actions {
+            info!(
+                "shuffled action {:?}",
+                action_query.get(e_action).unwrap().name
+            );
             commands.entity(e_action).insert(AvailableAction);
         }
     }
@@ -247,7 +256,7 @@ pub struct UnitOwnsActionBar(Entity);
 pub fn set_action_bar(
     mut commands: Commands,
     assets: Res<CardAssets>,
-    unit_query: Query<(Entity, &UnitDesc), With<Player>>,
+    unit_query: Query<(Entity, &UnitDesc, &UnitPriority), With<Player>>,
 ) {
     commands
         .spawn(Node {
@@ -261,7 +270,13 @@ pub fn set_action_bar(
             ..Default::default()
         })
         .with_children(move |parent| {
-            for (e_unit, UnitDesc { name, .. }) in unit_query {
+            for (e_unit, UnitDesc { name, .. }, _) in
+                unit_query
+                    .iter()
+                    .sort_by::<(Entity, &UnitDesc, &UnitPriority)>(
+                        |(_, _, UnitPriority(p0)), (_, _, UnitPriority(p1))| p0.cmp(p1),
+                    )
+            {
                 let slicer = TextureSlicer {
                     border: BorderRect::all(20.0),
                     center_scale_mode: SliceScaleMode::Tile { stretch_value: 1.0 },

@@ -3,6 +3,7 @@ use bevy_asset_loader::prelude::*;
 
 use crate::asset::GameState;
 
+pub mod ai;
 pub mod mortal;
 
 pub struct EnemyPlugin;

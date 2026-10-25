@@ -51,6 +51,10 @@ pub struct UnitDesc {
     pub flavor: &'static str,
 }
 
+/// Unique numerical identifier for the unit. Various ordering systems use it.
+#[derive(Component, Debug, Clone, FromTemplate)]
+pub struct UnitPriority(pub u32);
+
 #[derive(Component)]
 #[component(storage = "SparseSet")]
 pub struct HoveredUnit;

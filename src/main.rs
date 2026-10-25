@@ -11,12 +11,13 @@ use bevy_hanabi::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::{ActionPlugin, AvailableAction, OwnedByUnit},
+    actions::{ActionPlugin, ActionType, OwnedByUnit},
     asset::{GameState, NineAssetPlugin},
     damage::DamagePlugin,
     director::DirectorPlugin,
     enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
     field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
+    impi::{Impi, ImpiPlugin},
     nine::{Nine, NinePlugin},
     status::StatusPlugin,
     symmetra::{Symmetra, SymmetraPlugin},
@@ -31,6 +32,7 @@ pub mod damage;
 pub mod director;
 pub mod enemy;
 pub mod field;
+pub mod impi;
 pub mod nine;
 pub mod status;
 pub mod symmetra;
@@ -63,7 +65,7 @@ fn main() {
             StatusPlugin,
             DirectorPlugin,
         ))
-        .add_plugins((NinePlugin, SymmetraPlugin))
+        .add_plugins((NinePlugin, SymmetraPlugin, ImpiPlugin))
         .insert_resource(MeshPickingSettings {
             require_markers: true,
             ray_cast_visibility: RayCastVisibility::Any,
@@ -89,13 +91,16 @@ fn main() {
                     // ??? why do I need to annotate this at all?
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Nine>)
                     .pipe(nine::spawn_with_hand),
-                (|| HexCoord::new(1, -1))
+                (|| HexCoord::new(2, -1))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Symmetra>)
                     .pipe(|e_symmetra: In<Result<Entity>>, mut commands: Commands| {
                         commands
                             .entity(*e_symmetra.as_ref().unwrap())
                             .observe(symmetra::setup_symmetra_model);
                     }),
+                (|| HexCoord::new(1, -1))
+                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Impi>)
+                    .pipe(|_in: In<Result<Entity>>| {}),
                 entry.before(actions::set_action_bar),
             )
                 .chain(),
@@ -140,15 +145,14 @@ fn entry(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    _gltfs: Res<Assets<Gltf>>,
     enemy_assets: Res<EnemyAssets>,
-    _player_field: Res<Field<Player>>,
     cpu_field: Res<Field<Cpu>>,
-    _tf_query: Query<&GlobalTransform>,
-    nine_query: Query<Entity, With<Nine>>,
-    symmetra_query: Query<Entity, With<Symmetra>>,
+    nine_query: Single<Entity, With<Nine>>,
+    symmetra_query: Single<Entity, With<Symmetra>>,
+    impi_query: Single<Entity, With<Impi>>,
 ) {
-    println!("yeah");
+    info!("entry");
+
     commands.spawn((
         PointLight {
             shadow_maps_enabled: true,
@@ -173,15 +177,16 @@ fn entry(
     ));
 
     let e_cell = cpu_field.cells.get(&HexCoord::new(1, -1)).unwrap();
-    let _e_mortal = commands
+    let e_mortal = commands
         .spawn((
             WorldAssetRoot(enemy_assets.mortal.clone()),
             Mortal,
             OccupyingCell(*e_cell),
         ))
         .id();
+
     let e_cell2 = cpu_field.cells.get(&HexCoord::new(0, -3)).unwrap();
-    let _e_mortal2 = commands
+    let e_mortal2 = commands
         .spawn((
             WorldAssetRoot(enemy_assets.mortal.clone()),
             Mortal,
@@ -189,41 +194,61 @@ fn entry(
         ))
         .id();
 
-    dbg!(HexCoord::new(1, -1).row());
-    dbg!(HexCoord::new(0, -3).row());
-
-    let e_nine = nine_query.single().unwrap();
+    let e_nine = nine_query.into_inner();
 
     commands
-        .spawn((crate::nine::Crush, AvailableAction, OwnedByUnit(e_nine)))
-        .observe(crate::nine::Crush::play);
-    commands
-        .spawn((crate::nine::Slap, AvailableAction, OwnedByUnit(e_nine)))
-        .observe(crate::nine::Slap::play);
-
-    let e_symmetra = symmetra_query.single().unwrap();
+        .spawn((crate::enemy::mortal::Punch, OwnedByUnit(e_mortal)))
+        .with_children(|parent| {
+            parent.spawn(crate::enemy::mortal::Punch::play().with_entity(parent.target_entity()));
+        });
 
     commands
-        .spawn((
-            crate::symmetra::SummonRedGlyph,
-            AvailableAction,
-            OwnedByUnit(e_symmetra),
-        ))
-        .observe(crate::symmetra::SummonRedGlyph::play);
+        .spawn((crate::enemy::mortal::Punch, OwnedByUnit(e_mortal2)))
+        .with_children(|parent| {
+            parent.spawn(crate::enemy::mortal::Punch::play().with_entity(parent.target_entity()));
+        });
 
     commands
-        .spawn((
-            crate::symmetra::SummonBlueGlyph,
-            AvailableAction,
-            OwnedByUnit(e_symmetra),
-        ))
-        .observe(crate::symmetra::SummonBlueGlyph::play);
+        .spawn((crate::nine::Crush, OwnedByUnit(e_nine)))
+        .with_children(|parent| {
+            parent.spawn(crate::nine::Crush::play().with_entity(parent.target_entity()));
+        });
+    commands
+        .spawn((crate::nine::Slap, OwnedByUnit(e_nine)))
+        .with_children(|parent| {
+            parent.spawn(crate::nine::Slap::play().with_entity(parent.target_entity()));
+        });
+
+    let e_symmetra = symmetra_query.into_inner();
 
     commands
-        .spawn((
-            crate::symmetra::SummonGreenGlyph,
-            AvailableAction,
-            OwnedByUnit(e_symmetra),
-        ))
-        .observe(crate::symmetra::SummonGreenGlyph::play);
+        .spawn((crate::symmetra::SummonRedGlyph, OwnedByUnit(e_symmetra)))
+        .with_children(|parent| {
+            parent
+                .spawn(crate::symmetra::SummonRedGlyph::play().with_entity(parent.target_entity()));
+        });
+
+    commands
+        .spawn((crate::symmetra::SummonBlueGlyph, OwnedByUnit(e_symmetra)))
+        .with_children(|parent| {
+            parent.spawn(
+                crate::symmetra::SummonBlueGlyph::play().with_entity(parent.target_entity()),
+            );
+        });
+
+    commands
+        .spawn((crate::symmetra::SummonGreenGlyph, OwnedByUnit(e_symmetra)))
+        .with_children(|parent| {
+            parent.spawn(
+                crate::symmetra::SummonGreenGlyph::play().with_entity(parent.target_entity()),
+            );
+        });
+
+    let e_impi = impi_query.into_inner();
+
+    commands
+        .spawn((crate::impi::Fork, OwnedByUnit(e_impi)))
+        .with_children(|parent| {
+            parent.spawn(crate::impi::Fork::play().with_entity(parent.target_entity()));
+        });
 }

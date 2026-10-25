@@ -15,14 +15,14 @@ use rand::RngExt;
 
 use crate::{
     actions::{
-        Action, CardArt, OwnedByUnit, Played, Target,
+        Action, ActionType, CardArt, OwnedByUnit, Played, Target,
         tags::{self, *},
     },
     asset::{GameState, MaterialBaseColorLens},
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
     field::{FieldCell, OccupiedByUnit},
     turn::Player,
-    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitType},
+    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitPriority, UnitType},
 };
 
 pub struct SymmetraPlugin;
@@ -77,6 +77,8 @@ pub struct SymmetraAssets {
     pub cloak: Handle<StandardMaterial>,
     #[asset(path = "gltf/symmetra.glb#Animation0")]
     pub idle: Handle<AnimationClip>,
+    #[asset(path = "audio/glyph.wav")]
+    pub glyph: Handle<AudioSource>,
 }
 
 impl UnitModelResource for SymmetraAssets {
@@ -107,6 +109,7 @@ impl UnitAnimations for SymmetraAnimations {
 #[derive(Component, Default)]
 #[require(
     Unit,
+    UnitPriority(1),
     Player,
     UnitDesc {
         name: "Symmetra",
@@ -201,21 +204,23 @@ impl SimpleGlyph for GreenGlyph {
 )]
 pub struct SummonRedGlyph;
 
-impl SummonRedGlyph {
-    pub fn play(
-        trigger: On<Played>,
-        commands: Commands,
-        target_query: Query<Entity, With<Target>>,
-        action_query: Query<&OwnedByUnit>,
-        chroma_query: Query<(&UnitColor, &Chroma)>,
-    ) {
-        place_glyphs_on_action::<RedGlyph>(
-            trigger,
-            commands,
-            target_query,
-            action_query,
-            chroma_query,
-        );
+impl ActionType for SummonRedGlyph {
+    fn play() -> Observer {
+        Observer::new(
+            |trigger: On<Played>,
+             commands: Commands,
+             target_query: Query<Entity, With<Target>>,
+             action_query: Query<&OwnedByUnit>,
+             chroma_query: Query<(&UnitColor, &Chroma)>| {
+                place_glyphs_on_action::<RedGlyph>(
+                    trigger,
+                    commands,
+                    target_query,
+                    action_query,
+                    chroma_query,
+                );
+            },
+        )
     }
 }
 
@@ -229,21 +234,23 @@ impl SummonRedGlyph {
 )]
 pub struct SummonBlueGlyph;
 
-impl SummonBlueGlyph {
-    pub fn play(
-        trigger: On<Played>,
-        commands: Commands,
-        target_query: Query<Entity, With<Target>>,
-        action_query: Query<&OwnedByUnit>,
-        chroma_query: Query<(&UnitColor, &Chroma)>,
-    ) {
-        place_glyphs_on_action::<BlueGlyph>(
-            trigger,
-            commands,
-            target_query,
-            action_query,
-            chroma_query,
-        );
+impl ActionType for SummonBlueGlyph {
+    fn play() -> Observer {
+        Observer::new(
+            |trigger: On<Played>,
+             commands: Commands,
+             target_query: Query<Entity, With<Target>>,
+             action_query: Query<&OwnedByUnit>,
+             chroma_query: Query<(&UnitColor, &Chroma)>| {
+                place_glyphs_on_action::<BlueGlyph>(
+                    trigger,
+                    commands,
+                    target_query,
+                    action_query,
+                    chroma_query,
+                );
+            },
+        )
     }
 }
 
@@ -257,21 +264,23 @@ impl SummonBlueGlyph {
 )]
 pub struct SummonGreenGlyph;
 
-impl SummonGreenGlyph {
-    pub fn play(
-        trigger: On<Played>,
-        commands: Commands,
-        target_query: Query<Entity, With<Target>>,
-        action_query: Query<&OwnedByUnit>,
-        chroma_query: Query<(&UnitColor, &Chroma)>,
-    ) {
-        place_glyphs_on_action::<GreenGlyph>(
-            trigger,
-            commands,
-            target_query,
-            action_query,
-            chroma_query,
-        );
+impl ActionType for SummonGreenGlyph {
+    fn play() -> Observer {
+        Observer::new(
+            |trigger: On<Played>,
+             commands: Commands,
+             target_query: Query<Entity, With<Target>>,
+             action_query: Query<&OwnedByUnit>,
+             chroma_query: Query<(&UnitColor, &Chroma)>| {
+                place_glyphs_on_action::<GreenGlyph>(
+                    trigger,
+                    commands,
+                    target_query,
+                    action_query,
+                    chroma_query,
+                );
+            },
+        )
     }
 }
 
@@ -313,10 +322,12 @@ pub fn place_glyphs_on_action<T: SimpleGlyph + Default>(
 
 pub fn glyph_on_cell_enter<T: SimpleGlyph>(
     trigger: On<Add, OccupiedByUnit>,
-    cell_query: Query<(&Glyph, &OccupiedByUnit), With<T>>,
+    mut commands: Commands,
+    cell_query: Query<(Entity, &Glyph, &OccupiedByUnit), With<T>>,
     mut damage_events: MessageWriter<DamageEvent>,
+    assets: Res<SymmetraAssets>,
 ) {
-    let Ok((glyph, occupied_by)) = cell_query.get(trigger.entity) else {
+    let Ok((e_glyph, glyph, occupied_by)) = cell_query.get(trigger.entity) else {
         return;
     };
 
@@ -327,6 +338,11 @@ pub fn glyph_on_cell_enter<T: SimpleGlyph>(
         damage,
         target: occupied_by.iter().next().unwrap(),
     });
+
+    commands.entity(e_glyph).insert((
+        AudioPlayer::new(assets.glyph.clone()),
+        PlaybackSettings::REMOVE,
+    ));
 }
 
 #[derive(Resource)]
