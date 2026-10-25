@@ -37,6 +37,8 @@ impl Plugin for NinePlugin {
 pub struct NineAssets {
     #[asset(path = "gltf/nine.glb#Scene0")]
     pub nine: Handle<WorldAsset>,
+    #[asset(path = "gltf/nine.glb#Animation0")]
+    pub idle: Handle<AnimationClip>,
     #[asset(path = "gltf/hand.glb#Scene0")]
     pub hand: Handle<WorldAsset>,
     #[asset(path = "gltf/hand.glb#Animation1")]
@@ -54,17 +56,21 @@ impl UnitModelResource for NineAssets {
 }
 
 #[derive(Component)]
-pub struct NineAnimations {}
+pub struct NineAnimations {
+    pub idle: AnimationNodeIndex,
+}
 
 impl UnitAnimations for NineAnimations {
     type Assets = NineAssets;
 
-    fn new(_assets: &Self::Assets, _graph: &mut AnimationGraph) -> Self {
-        Self {}
+    fn new(assets: &Self::Assets, graph: &mut AnimationGraph) -> Self {
+        Self {
+            idle: graph.add_clip(assets.idle.clone(), 1.0, graph.root),
+        }
     }
 
     fn idle(&self) -> Option<Vec<AnimationNodeIndex>> {
-        None
+        Some(vec![self.idle])
     }
 }
 
