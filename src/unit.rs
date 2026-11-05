@@ -338,6 +338,8 @@ pub fn spawn_at_location<T: UnitType + Default>(
         return Err(err);
     };
 
+    info!("spawn success at {:?}", coord);
+
     let mut graph = AnimationGraph::new();
     let animations = T::Animations::new(&assets, &mut graph);
 

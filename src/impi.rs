@@ -1,4 +1,4 @@
-use bevy::{ecs::relationship::Relationship, platform::collections::HashMap, prelude::*};
+use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_asset_loader::prelude::*;
 
 use crate::{
@@ -31,7 +31,7 @@ impl Plugin for ImpiPlugin {
     UnitDesc {
         name: "Impi",
         passive: "???",
-        flavor: "Fresh out of law school.",
+        flavor: "They don't pay me enough for this.",
     },
     UnitColor(Color::srgb(1.0, 0.0, 0.0)),
     Health(10.0),

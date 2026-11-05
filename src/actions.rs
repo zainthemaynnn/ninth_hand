@@ -82,7 +82,9 @@ pub fn shuffle_selected_actions(
         unit: e_unit,
     } in draw_events.read()
     {
-        let owns_action = collection_query.get(*e_unit).unwrap();
+        let Ok(owns_action) = collection_query.get(*e_unit) else {
+            continue;
+        };
 
         let selected_actions = owns_action.iter().sample(&mut rng, *amount);
 

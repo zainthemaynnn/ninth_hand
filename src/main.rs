@@ -5,6 +5,7 @@
 use bevy::{
     color::palettes::css::SILVER,
     gltf::{GltfPlugin, convert_coordinates::GltfConvertCoordinates},
+    post_process::bloom::Bloom,
     prelude::*,
 };
 use bevy_hanabi::prelude::*;
@@ -12,13 +13,16 @@ use bevy_tweening::TweeningPlugin;
 
 use crate::{
     actions::{ActionPlugin, ActionType, OwnedByUnit},
+    animus::{Animus, AnimusPlugin},
     asset::{GameState, NineAssetPlugin},
     damage::DamagePlugin,
     director::DirectorPlugin,
     enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
     field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
+    grease::{Grease, GreasePlugin},
     impi::{Impi, ImpiPlugin},
     nine::{Nine, NinePlugin},
+    presence::{Presence, PresencePlugin},
     status::StatusPlugin,
     symmetra::{Symmetra, SymmetraPlugin},
     turn::{Cpu, Player, TurnPlugin},
@@ -27,13 +31,16 @@ use crate::{
 };
 
 pub mod actions;
+pub mod animus;
 pub mod asset;
 pub mod damage;
 pub mod director;
 pub mod enemy;
 pub mod field;
+pub mod grease;
 pub mod impi;
 pub mod nine;
+pub mod presence;
 pub mod status;
 pub mod symmetra;
 pub mod systems;
@@ -65,7 +72,14 @@ fn main() {
             StatusPlugin,
             DirectorPlugin,
         ))
-        .add_plugins((NinePlugin, SymmetraPlugin, ImpiPlugin))
+        .add_plugins((
+            NinePlugin,
+            SymmetraPlugin,
+            ImpiPlugin,
+            AnimusPlugin,
+            GreasePlugin,
+            PresencePlugin,
+        ))
         .insert_resource(MeshPickingSettings {
             require_markers: true,
             ray_cast_visibility: RayCastVisibility::Any,
@@ -101,6 +115,15 @@ fn main() {
                 (|| HexCoord::new(-2, 1))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Impi>)
                     .pipe(|_in: In<Result<Entity>>| {}),
+                (|| HexCoord::new(-2, -1))
+                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Animus>)
+                    .pipe(|_in: In<Result<Entity>>| {}),
+                (|| HexCoord::new(2, -3))
+                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Grease>)
+                    .pipe(|_in: In<Result<Entity>>| {}),
+                (|| HexCoord::new(0, -3))
+                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Presence>)
+                    .pipe(presence::spawn_presence_smoke),
                 entry.before(actions::set_action_bar),
             )
                 .chain(),
@@ -150,6 +173,7 @@ fn entry(
     nine_query: Single<Entity, With<Nine>>,
     symmetra_query: Single<Entity, With<Symmetra>>,
     impi_query: Single<Entity, With<Impi>>,
+    animus_query: Single<Entity, With<Animus>>,
 ) {
     info!("entry");
 
@@ -172,6 +196,7 @@ fn entry(
 
     commands.spawn((
         Camera3d::default(),
+        Bloom::default(),
         MeshPickingCamera,
         Transform::from_xyz(24.0, 24.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
@@ -250,5 +275,13 @@ fn entry(
         .spawn((crate::impi::Fork, OwnedByUnit(e_impi)))
         .with_children(|parent| {
             parent.spawn(crate::impi::Fork::play().with_entity(parent.target_entity()));
+        });
+
+    let e_animus = animus_query.into_inner();
+
+    commands
+        .spawn((crate::animus::Smash, OwnedByUnit(e_animus)))
+        .with_children(|parent| {
+            parent.spawn(crate::animus::Smash::play().with_entity(parent.target_entity()));
         });
 }

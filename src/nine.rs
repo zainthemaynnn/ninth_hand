@@ -4,7 +4,7 @@ use std::{
 };
 
 use bevy::{
-    color::palettes, platform::collections::HashMap, prelude::*,
+    color::palettes, ecs::relationship::Relationship, platform::collections::HashMap, prelude::*,
     world_serialization::WorldInstanceReady,
 };
 use bevy_asset_loader::prelude::*;
@@ -30,6 +30,10 @@ impl Plugin for NinePlugin {
         app.init_resource::<NineKillEffect>()
             .init_resource::<NineSmokeEffect>()
             .add_observer(kill_effect)
+            .add_systems(
+                Update,
+                (hand_follow_owner, reset_hand_to_rest_position).chain(),
+            )
             .configure_loading_state(
                 LoadingStateConfig::new(GameState::AssetLoading).load_collection::<NineAssets>(),
             );
@@ -106,6 +110,7 @@ impl UnitType for Nine {
 
 #[derive(Component, Debug, Clone)]
 pub struct Hand {
+    pub owner_offset: Transform,
     pub rest_position: Transform,
 }
 
@@ -119,7 +124,7 @@ pub struct OwnsHand(Entity);
 
 #[derive(Component)]
 pub struct HandAnimationGraph {
-    pub idle: AnimationNodeIndex,
+    pub idle: Vec<AnimationNodeIndex>,
     pub fist: AnimationNodeIndex,
 }
 
@@ -162,16 +167,60 @@ pub fn spawn_with_hand(
     let roll = graph.add_clip(assets.hand_roll.clone(), 1.0, graph.root);
     commands.spawn((
         Hand {
+            owner_offset: Transform::from_xyz(0.0, -2.0, 4.0),
             rest_position: Transform::default(),
         },
         WorldAssetRoot(assets.hand.clone()),
         HandOwnedBy(e_nine),
-        HandAnimationGraph { idle, fist },
+        // Both clips are started by the initializer as the hand's idle animation.
+        HandAnimationGraph {
+            idle: vec![idle, roll],
+            fist,
+        },
         AnimatorInitializer {
             graph: graphs.add(graph),
             idle: Some(vec![idle, roll]),
         },
     ));
+}
+
+pub fn hand_follow_owner(
+    mut hand_query: Query<(&mut Hand, &HandOwnedBy), With<Hand>>,
+    unit_query: Query<&GlobalTransform>,
+) {
+    for (mut hand, owner) in hand_query.iter_mut() {
+        let unit_tf = unit_query.get(owner.get()).unwrap();
+
+        let target_affine = hand.owner_offset.compute_affine();
+
+        // 2. Invert the base GlobalTransform and multiply it by the target matrix
+        // Formula: Base_Inverse * Target
+        let relative_affine = unit_tf.affine().inverse() * target_affine;
+
+        // 3. Extract it back into a usable, regular Transform struct
+        let relative_transform = Transform::from_matrix(relative_affine.into());
+
+        hand.rest_position = relative_transform;
+    }
+}
+
+pub fn reset_hand_to_rest_position(
+    mut hand_query: Query<(&Hand, &mut Transform, &AnimatorEntity, &HandAnimationGraph)>,
+    animator_query: Query<&AnimationPlayer>,
+) {
+    for (hand, mut transform, AnimatorEntity(e_animator), graph) in &mut hand_query {
+        let Ok(animator) = animator_query.get(*e_animator) else {
+            continue;
+        };
+
+        let has_non_idle_animation = animator
+            .playing_animations()
+            .any(|(animation, _)| !graph.idle.contains(animation));
+
+        if !has_non_idle_animation {
+            *transform = hand.rest_position;
+        }
+    }
 }
 
 #[derive(Component)]
