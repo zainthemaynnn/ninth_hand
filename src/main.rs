@@ -21,6 +21,7 @@ use crate::{
     field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
     grease::{Grease, GreasePlugin},
     impi::{Impi, ImpiPlugin},
+    mary::{Mary, MaryPlugin},
     nine::{Nine, NinePlugin},
     presence::{Presence, PresencePlugin},
     status::StatusPlugin,
@@ -39,6 +40,7 @@ pub mod enemy;
 pub mod field;
 pub mod grease;
 pub mod impi;
+pub mod mary;
 pub mod nine;
 pub mod presence;
 pub mod status;
@@ -79,6 +81,7 @@ fn main() {
             AnimusPlugin,
             GreasePlugin,
             PresencePlugin,
+            MaryPlugin,
         ))
         .insert_resource(MeshPickingSettings {
             require_markers: true,
@@ -121,9 +124,12 @@ fn main() {
                 (|| HexCoord::new(2, -3))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Grease>)
                     .pipe(|_in: In<Result<Entity>>| {}),
-                (|| HexCoord::new(0, -3))
+                (|| HexCoord::new(-1, -3))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Presence>)
                     .pipe(presence::spawn_presence_smoke),
+                (|| HexCoord::new(0, -2))
+                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Mary>)
+                    .pipe(|_in: In<Result<Entity>>| {}),
                 entry.before(actions::set_action_bar),
             )
                 .chain(),
