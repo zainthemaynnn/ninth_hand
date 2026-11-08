@@ -93,7 +93,7 @@ impl UnitAnimations for NineAnimations {
         passive: "When killing an enemy, gets an additional action.",
         flavor: "MUAHAHAHAHA",
     },
-    UnitColor(palettes::basic::BLACK.into()),
+    UnitColor(Srgba::hex("#FF0027").unwrap().into()),
     Health(10.0),
     HealthCap(10.0),
     Resist(HashMap::from([

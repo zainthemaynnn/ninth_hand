@@ -30,10 +30,10 @@ impl Plugin for GreasePlugin {
     Player,
     UnitDesc {
         name: "Grease",
-        passive: "???",
-        flavor: "HATE. ORGANICS.",
+        passive: "Damage due to status or field effects is redirected to a random enemy.",
+        flavor: "I just can't do anything right... Blegh...",
     },
-    UnitColor(Srgba::hex("#CBC275").unwrap().into()),
+    UnitColor(Srgba::hex("#00FF1A").unwrap().into()),
     Health(10.0),
     HealthCap(10.0),
     Resist(HashMap::from([

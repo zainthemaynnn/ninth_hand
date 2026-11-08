@@ -34,18 +34,12 @@ impl Plugin for PresencePlugin {
     Player,
     UnitDesc {
         name: "Presence",
-        passive: "???",
-        flavor: "HATE. ORGANICS.",
+        passive: "If enveloping an enemy, they passively take 3 CLD at the end of the turn.",
+        flavor: "Worst part of this job is going down a mortal's esophagus. It's gross.",
     },
-    UnitColor(Srgba::hex("#CBC275").unwrap().into()),
+    UnitColor(Srgba::hex("#3ED2FF").unwrap().into()),
     Health(10.0),
     HealthCap(10.0),
-    Resist(HashMap::from([
-        (DamageVariant::Bash, 1.5),
-        (DamageVariant::Slash, 0.5),
-        (DamageVariant::Heat, 0.8),
-        (DamageVariant::Cold, 0.8),
-    ])),
 )]
 pub struct Presence;
 

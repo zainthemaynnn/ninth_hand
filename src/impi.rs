@@ -30,10 +30,10 @@ impl Plugin for ImpiPlugin {
     Player,
     UnitDesc {
         name: "Impi",
-        passive: "???",
+        passive: "When an enemy breaks a contract, 3 burn to their cell.",
         flavor: "They don't pay me enough for this.",
     },
-    UnitColor(Color::srgb(1.0, 0.0, 0.0)),
+    UnitColor(Srgba::hex("#DD821A").unwrap().into()),
     Health(10.0),
     HealthCap(10.0),
     Resist(HashMap::from([

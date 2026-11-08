@@ -31,17 +31,11 @@ impl Plugin for MaryPlugin {
     UnitDesc {
         name: "Mary",
         passive: "Starts at 50% HP. Every turn loses 10% HP.",
-        flavor: "The air will smell of the mortals' flesh burning in hellfire.",
+        flavor: "The air will smell of the mortals' flesh smoldering in the pits of hell.",
     },
     UnitColor(Srgba::hex("#0900FF").unwrap().into()),
     Health(5.0),
     HealthCap(10.0),
-    Resist(HashMap::from([
-        (DamageVariant::Bash, 1.5),
-        (DamageVariant::Slash, 0.5),
-        (DamageVariant::Heat, 0.8),
-        (DamageVariant::Cold, 0.8),
-    ])),
 )]
 pub struct Mary;
 

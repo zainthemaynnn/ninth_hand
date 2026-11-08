@@ -30,7 +30,7 @@ impl Plugin for AnimusPlugin {
     Player,
     UnitDesc {
         name: "Animus",
-        passive: "???",
+        passive: "No knockback. If adjacent to a construct, it doesn't deteriorate.",
         flavor: "HATE. ORGANICS.",
     },
     UnitColor(Srgba::hex("#CBC275").unwrap().into()),

@@ -114,7 +114,7 @@ impl UnitAnimations for SymmetraAnimations {
     UnitDesc {
         name: "Symmetra",
         passive: "Every turn, guaranteed to draw a random extra glyph.",
-        flavor: "Mortals are stupid. Geometry is not.",
+        flavor: "Go away.",
     },
     UnitColor(Srgba::hex("#C23EA4").unwrap().into()), // #780EC2 accent??
     Health(10.0),
