@@ -12,23 +12,7 @@ use bevy_hanabi::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::{ActionPlugin, ActionType, OwnedByUnit},
-    animus::{Animus, AnimusPlugin},
-    asset::{GameState, NineAssetPlugin},
-    damage::DamagePlugin,
-    director::DirectorPlugin,
-    enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
-    field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
-    grease::{Grease, GreasePlugin},
-    impi::{Impi, ImpiPlugin},
-    mary::{Mary, MaryPlugin},
-    nine::{Nine, NinePlugin},
-    presence::{Presence, PresencePlugin},
-    status::StatusPlugin,
-    symmetra::{Symmetra, SymmetraPlugin},
-    turn::{Cpu, Player, TurnPlugin},
-    ui::NineUiPlugin,
-    unit::UnitPlugin,
+    actions::{ActionPlugin, ActionType, OwnedByUnit}, animus::{Animus, AnimusPlugin}, asset::{GameState, NineAssetPlugin}, damage::DamagePlugin, director::DirectorPlugin, enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal}, field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field}, fractal::{Fractal, FractalPlugin}, grease::{Grease, GreasePlugin}, impi::{Impi, ImpiPlugin}, mary::{Mary, MaryPlugin}, nine::{Nine, NinePlugin}, presence::{Presence, PresencePlugin}, status::StatusPlugin, symmetra::{Symmetra, SymmetraPlugin}, turn::{Cpu, Player, TurnPlugin}, ui::NineUiPlugin, unit::UnitPlugin,
 };
 
 pub mod actions;
@@ -38,6 +22,7 @@ pub mod damage;
 pub mod director;
 pub mod enemy;
 pub mod field;
+pub mod fractal;
 pub mod grease;
 pub mod impi;
 pub mod mary;
@@ -82,6 +67,7 @@ fn main() {
             GreasePlugin,
             PresencePlugin,
             MaryPlugin,
+            FractalPlugin,
         ))
         .insert_resource(MeshPickingSettings {
             require_markers: true,
@@ -130,6 +116,9 @@ fn main() {
                 (|| HexCoord::new(0, -2))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Mary>)
                     .pipe(|_in: In<Result<Entity>>| {}),
+                (|| HexCoord::new(1, -4))
+                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Fractal>)
+                    .pipe(fractal::spawn_fractal_head),
                 entry.before(actions::set_action_bar),
             )
                 .chain(),
