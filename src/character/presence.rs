@@ -1,6 +1,6 @@
 use std::f32::consts::TAU;
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 use bevy_hanabi::prelude::*;
 
@@ -10,7 +10,7 @@ use crate::{
         tags::{FrontTarget, LineOfSight, SingleTarget},
     },
     asset::{EllipsoidBackfaceDepthModifier, GameState},
-    damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
+    damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap},
     field::OccupiedByUnit,
     turn::Player,
     unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitPriority, UnitType},

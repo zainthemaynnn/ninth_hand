@@ -4,7 +4,7 @@ use std::{
 };
 
 use bevy::{
-    color::palettes, ecs::relationship::Relationship, platform::collections::HashMap, prelude::*,
+    ecs::relationship::Relationship, platform::collections::HashMap, prelude::*,
     world_serialization::WorldInstanceReady,
 };
 use bevy_asset_loader::prelude::*;
@@ -42,8 +42,10 @@ impl Plugin for NinePlugin {
 
 #[derive(AssetCollection, Resource)]
 pub struct NineAssets {
-    #[asset(path = "gltf/nine.glb#Scene0")]
-    pub nine: Handle<WorldAsset>,
+    #[asset(path = "gltf/nine.glb")]
+    pub nine: Handle<Gltf>,
+    #[asset(path = "gltf/nine.glb#Scene2")]
+    pub nine_model: Handle<WorldAsset>,
     #[asset(path = "gltf/nine.glb#Animation0")]
     pub idle: Handle<AnimationClip>,
     #[asset(path = "gltf/hand.glb#Scene0")]
@@ -60,7 +62,7 @@ pub struct NineAssets {
 
 impl UnitModelResource for NineAssets {
     fn model_handle(&self) -> Handle<WorldAsset> {
-        self.nine.clone()
+        self.nine_model.clone()
     }
 }
 
@@ -167,7 +169,7 @@ pub fn spawn_with_hand(
     let roll = graph.add_clip(assets.hand_roll.clone(), 1.0, graph.root);
     commands.spawn((
         Hand {
-            owner_offset: Transform::from_xyz(0.0, -2.0, 4.0),
+            owner_offset: Transform::from_xyz(0.0, 8.0, 4.0),
             rest_position: Transform::default(),
         },
         WorldAssetRoot(assets.hand.clone()),
@@ -191,16 +193,8 @@ pub fn hand_follow_owner(
     for (mut hand, owner) in hand_query.iter_mut() {
         let unit_tf = unit_query.get(owner.get()).unwrap();
 
-        let target_affine = hand.owner_offset.compute_affine();
-
-        // 2. Invert the base GlobalTransform and multiply it by the target matrix
-        // Formula: Base_Inverse * Target
-        let relative_affine = unit_tf.affine().inverse() * target_affine;
-
-        // 3. Extract it back into a usable, regular Transform struct
-        let relative_transform = Transform::from_matrix(relative_affine.into());
-
-        hand.rest_position = relative_transform;
+        let target_affine = unit_tf.affine() * hand.owner_offset.compute_affine();
+        hand.rest_position = Transform::from_matrix(target_affine.into());
     }
 }
 

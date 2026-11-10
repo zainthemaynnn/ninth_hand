@@ -92,9 +92,9 @@ impl UnitType for Grease {
     LineOfSight,
     CardArt("abyss"),
 )]
-pub struct Smash;
+pub struct Slime;
 
-impl ActionType for Smash {
+impl ActionType for Slime {
     fn play() -> Observer {
         Observer::new(
             |trigger: On<Played>,

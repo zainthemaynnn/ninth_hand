@@ -1,4 +1,4 @@
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::prelude::*;
 use bevy_asset_loader::prelude::*;
 
 use crate::{
@@ -7,7 +7,7 @@ use crate::{
         tags::{FrontTarget, LineOfSight, SingleTarget},
     },
     asset::GameState,
-    damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
+    damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap},
     field::OccupiedByUnit,
     turn::Player,
     unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitPriority, UnitType},

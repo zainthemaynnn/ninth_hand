@@ -1,20 +1,20 @@
 use std::f32::consts::TAU;
 
-use bevy::{platform::collections::HashMap, prelude::*, world_serialization::WorldInstanceReady};
+use bevy::{prelude::*, world_serialization::WorldInstanceReady};
 use bevy_asset_loader::prelude::*;
 use bevy_hanabi::{
-    Attribute, EffectAsset, EffectMaterial, ExprWriter, OrientMode,
-    OrientModifier, ParticleEffect, ParticleTextureModifier, ScalarType, SetAttributeModifier,
-    SimulationSpace, SizeOverLifetimeModifier, SpawnerSettings,
+    Attribute, EffectAsset, EffectMaterial, ExprWriter, OrientMode, OrientModifier, ParticleEffect,
+    ParticleTextureModifier, ScalarType, SetAttributeModifier, SimulationSpace,
+    SizeOverLifetimeModifier, SpawnerSettings,
 };
 
 use crate::{
     actions::{
         Action, ActionType, CardArt, OwnedByUnit, Played, Target,
-        tags::{FrontTarget, LineOfSight, SingleTarget},
+        tags::{LineOfSight, SingleTarget},
     },
     asset::GameState,
-    damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
+    damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap},
     field::OccupiedByUnit,
     systems::find_named_node,
     turn::Player,
@@ -98,7 +98,8 @@ pub fn spawn_fractal_head(In(result): In<Result<Entity>>, mut commands: Commands
              assets: Res<FractalAssets>,
              glitch: Res<HeadGlitchEffect>| {
                 let e_head =
-                    find_named_node(trigger.entity, "HeadEmpty", &children_query, &name_query).unwrap();
+                    find_named_node(trigger.entity, "HeadEmpty", &children_query, &name_query)
+                        .unwrap();
                 commands.entity(e_head).insert((
                     ParticleEffect::new(glitch.0.clone()),
                     EffectMaterial {

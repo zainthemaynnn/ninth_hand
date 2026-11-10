@@ -12,24 +12,30 @@ use bevy_hanabi::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::{ActionPlugin, ActionType, OwnedByUnit}, animus::{Animus, AnimusPlugin}, asset::{GameState, NineAssetPlugin}, damage::DamagePlugin, director::DirectorPlugin, enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal}, field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field}, fractal::{Fractal, FractalPlugin}, grease::{Grease, GreasePlugin}, impi::{Impi, ImpiPlugin}, mary::{Mary, MaryPlugin}, nine::{Nine, NinePlugin}, presence::{Presence, PresencePlugin}, status::StatusPlugin, symmetra::{Symmetra, SymmetraPlugin}, turn::{Cpu, Player, TurnPlugin}, ui::NineUiPlugin, unit::UnitPlugin,
+    actions::{ActionPlugin, ActionType, OwnedByUnit},
+    asset::{GameState, NineAssetPlugin},
+    character::{
+        CharacterPlugins, animus::Animus, fractal::Fractal, grease::Grease, impi::Impi, mary::Mary,
+        nine::Nine, presence::Presence, symmetra::Symmetra,
+    },
+    damage::DamagePlugin,
+    director::DirectorPlugin,
+    enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
+    field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
+    status::StatusPlugin,
+    turn::{Cpu, Player, TurnPlugin},
+    ui::NineUiPlugin,
+    unit::UnitPlugin,
 };
 
 pub mod actions;
-pub mod animus;
 pub mod asset;
+pub mod character;
 pub mod damage;
 pub mod director;
 pub mod enemy;
 pub mod field;
-pub mod fractal;
-pub mod grease;
-pub mod impi;
-pub mod mary;
-pub mod nine;
-pub mod presence;
 pub mod status;
-pub mod symmetra;
 pub mod systems;
 pub mod turn;
 pub mod ui;
@@ -59,16 +65,7 @@ fn main() {
             StatusPlugin,
             DirectorPlugin,
         ))
-        .add_plugins((
-            NinePlugin,
-            SymmetraPlugin,
-            ImpiPlugin,
-            AnimusPlugin,
-            GreasePlugin,
-            PresencePlugin,
-            MaryPlugin,
-            FractalPlugin,
-        ))
+        .add_plugins((CharacterPlugins,))
         .insert_resource(MeshPickingSettings {
             require_markers: true,
             ray_cast_visibility: RayCastVisibility::Any,
@@ -93,13 +90,13 @@ fn main() {
                 (|| HexCoord::new(0, 0))
                     // ??? why do I need to annotate this at all?
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Nine>)
-                    .pipe(nine::spawn_with_hand),
+                    .pipe(character::nine::spawn_with_hand),
                 (|| HexCoord::new(2, -1))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Symmetra>)
                     .pipe(|e_symmetra: In<Result<Entity>>, mut commands: Commands| {
                         commands
                             .entity(*e_symmetra.as_ref().unwrap())
-                            .observe(symmetra::setup_symmetra_model);
+                            .observe(character::symmetra::setup_symmetra_model);
                     }),
                 (|| HexCoord::new(-2, 1))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Impi>)
@@ -112,13 +109,13 @@ fn main() {
                     .pipe(|_in: In<Result<Entity>>| {}),
                 (|| HexCoord::new(-1, -3))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Presence>)
-                    .pipe(presence::spawn_presence_smoke),
+                    .pipe(character::presence::spawn_presence_smoke),
                 (|| HexCoord::new(0, -2))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Mary>)
                     .pipe(|_in: In<Result<Entity>>| {}),
                 (|| HexCoord::new(1, -4))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Fractal>)
-                    .pipe(fractal::spawn_fractal_head),
+                    .pipe(character::fractal::spawn_fractal_head),
                 entry.before(actions::set_action_bar),
             )
                 .chain(),
@@ -229,54 +226,68 @@ fn entry(
         });
 
     commands
-        .spawn((crate::nine::Crush, OwnedByUnit(e_nine)))
+        .spawn((crate::character::nine::Crush, OwnedByUnit(e_nine)))
         .with_children(|parent| {
-            parent.spawn(crate::nine::Crush::play().with_entity(parent.target_entity()));
+            parent.spawn(crate::character::nine::Crush::play().with_entity(parent.target_entity()));
         });
     commands
-        .spawn((crate::nine::Slap, OwnedByUnit(e_nine)))
+        .spawn((crate::character::nine::Slap, OwnedByUnit(e_nine)))
         .with_children(|parent| {
-            parent.spawn(crate::nine::Slap::play().with_entity(parent.target_entity()));
+            parent.spawn(crate::character::nine::Slap::play().with_entity(parent.target_entity()));
         });
 
     let e_symmetra = symmetra_query.into_inner();
 
     commands
-        .spawn((crate::symmetra::SummonRedGlyph, OwnedByUnit(e_symmetra)))
-        .with_children(|parent| {
-            parent
-                .spawn(crate::symmetra::SummonRedGlyph::play().with_entity(parent.target_entity()));
-        });
-
-    commands
-        .spawn((crate::symmetra::SummonBlueGlyph, OwnedByUnit(e_symmetra)))
+        .spawn((
+            crate::character::symmetra::SummonRedGlyph,
+            OwnedByUnit(e_symmetra),
+        ))
         .with_children(|parent| {
             parent.spawn(
-                crate::symmetra::SummonBlueGlyph::play().with_entity(parent.target_entity()),
+                crate::character::symmetra::SummonRedGlyph::play()
+                    .with_entity(parent.target_entity()),
             );
         });
 
     commands
-        .spawn((crate::symmetra::SummonGreenGlyph, OwnedByUnit(e_symmetra)))
+        .spawn((
+            crate::character::symmetra::SummonBlueGlyph,
+            OwnedByUnit(e_symmetra),
+        ))
         .with_children(|parent| {
             parent.spawn(
-                crate::symmetra::SummonGreenGlyph::play().with_entity(parent.target_entity()),
+                crate::character::symmetra::SummonBlueGlyph::play()
+                    .with_entity(parent.target_entity()),
+            );
+        });
+
+    commands
+        .spawn((
+            crate::character::symmetra::SummonGreenGlyph,
+            OwnedByUnit(e_symmetra),
+        ))
+        .with_children(|parent| {
+            parent.spawn(
+                crate::character::symmetra::SummonGreenGlyph::play()
+                    .with_entity(parent.target_entity()),
             );
         });
 
     let e_impi = impi_query.into_inner();
 
     commands
-        .spawn((crate::impi::Fork, OwnedByUnit(e_impi)))
+        .spawn((crate::character::impi::Fork, OwnedByUnit(e_impi)))
         .with_children(|parent| {
-            parent.spawn(crate::impi::Fork::play().with_entity(parent.target_entity()));
+            parent.spawn(crate::character::impi::Fork::play().with_entity(parent.target_entity()));
         });
 
     let e_animus = animus_query.into_inner();
 
     commands
-        .spawn((crate::animus::Smash, OwnedByUnit(e_animus)))
+        .spawn((crate::character::animus::Smash, OwnedByUnit(e_animus)))
         .with_children(|parent| {
-            parent.spawn(crate::animus::Smash::play().with_entity(parent.target_entity()));
+            parent
+                .spawn(crate::character::animus::Smash::play().with_entity(parent.target_entity()));
         });
 }
