@@ -32,11 +32,16 @@ impl Plugin for ActionPlugin {
                     select_deselect_card,
                     deselect_action_on_card_deselect.after(select_deselect_card),
                     select_action_on_card_select.after(deselect_action_on_card_deselect),
+                    discard_deactivated_actions,
                 )
-                    .run_if(in_state(GameState::InGame)),
+                    .run_if(
+                        in_state(TurnState::Player)
+                            .or_else(in_state(TurnState::PlayerStart))
+                            .or_else(in_state(TurnState::PlayerDone)),
+                    ),
             )
-            .add_observer(select_card_animation.run_if(in_state(TurnState::Player)))
-            .add_observer(deselect_card_animation.run_if(in_state(TurnState::Player)))
+            .add_observer(select_card_animation)
+            .add_observer(deselect_card_animation)
             .add_observer(deselect_action_cells_on_deselect)
             .add_observer(active_unit_target)
             .add_observer(front_target)
@@ -334,10 +339,16 @@ pub fn update_action_bar(
     mut commands: Commands,
     card_assets: Res<CardAssets>,
     actions_query: Query<(Entity, &Action, &CardArt, &OwnedByUnit), Added<AvailableAction>>,
-    unit_query: Query<(&UnitFont, &UnitOwnsActionBar)>,
+    unit_query: Query<(Option<&UnitFont>, &UnitOwnsActionBar)>,
 ) {
     for (e_action, action, card_art, owned_by) in actions_query {
-        let (font, owns) = unit_query.get(owned_by.get()).unwrap();
+        let Ok((font, owns)) = unit_query.get(owned_by.get()) else {
+            continue;
+        };
+
+        let font = font
+            .map(|unit_font| FontSource::Handle(unit_font.0.clone()))
+            .unwrap_or_default();
         let mut selection_tween = TweenAnim::new(Tween::new(
             EaseFunction::QuadraticOut,
             Duration::from_millis(2000),
@@ -386,7 +397,7 @@ pub fn update_action_bar(
                         ..default()
                     },
                     TextFont {
-                        font: FontSource::Handle(font.0.clone()),
+                        font: font.clone(),
                         font_size: FontSize::Px(20.0),
                         ..default()
                     },
@@ -404,7 +415,7 @@ pub fn update_action_bar(
                         ..default()
                     },
                     TextFont {
-                        font: FontSource::Handle(font.0.clone()),
+                        font: font.clone(),
                         font_size: FontSize::Px(16.0),
                         ..default()
                     },
@@ -664,9 +675,23 @@ pub fn deselect_played_action(
     mut commands: Commands,
     action_query: Query<&OwnsCard>,
 ) {
-    commands.entity(trigger.entity).remove::<SelectedAction>();
+    commands
+        .entity(trigger.entity)
+        .remove::<(SelectedAction, AvailableAction)>();
     let OwnsCard(e_card) = action_query.get(trigger.entity).unwrap();
     commands.entity(*e_card).insert(Discarded);
+}
+
+pub fn discard_deactivated_actions(
+    mut commands: Commands,
+    mut discarded: RemovedComponents<AvailableAction>,
+    action_query: Query<&OwnsCard>,
+) {
+    for e_card in discarded.read() {
+        if let Ok(OwnsCard(e_card)) = action_query.get(e_card) {
+            commands.entity(*e_card).insert(Discarded);
+        }
+    }
 }
 
 pub fn discard_card_animation(trigger: On<Add, Discarded>, mut commands: Commands) {
@@ -704,7 +729,6 @@ pub fn discard_card_animation(trigger: On<Add, Discarded>, mut commands: Command
                     commands
                         .entity(parent.get(trigger.anim_entity).unwrap().0)
                         .despawn();
-                    info!("floaty text despawned");
                 },
             );
     });
