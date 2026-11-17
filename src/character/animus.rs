@@ -3,14 +3,14 @@ use bevy_asset_loader::prelude::*;
 
 use crate::{
     actions::{
-        Action, ActionType, CardArt, OwnedByUnit, Played, Target,
+        Action, ActionType, OwnedByUnit, Played, Target,
         tags::{FrontTarget, LineOfSight, SingleTarget},
     },
     asset::GameState,
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
     field::OccupiedByUnit,
     turn::Player,
-    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitPriority, UnitType},
+    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitAssetResource, UnitPriority, UnitType},
 };
 
 pub struct AnimusPlugin;
@@ -26,7 +26,7 @@ impl Plugin for AnimusPlugin {
 #[derive(Component, Default)]
 #[require(
     Unit,
-    UnitPriority(4),
+    UnitPriority(3),
     Player,
     UnitDesc {
         name: "Animus",
@@ -51,11 +51,17 @@ pub struct AnimusAssets {
     pub animus: Handle<WorldAsset>,
     #[asset(path = "gltf/animus.glb#Animation0")]
     pub idle: Handle<AnimationClip>,
+    #[asset(path = "img/font/strange-marks-font/StrangeMarks-ovKMa.ttf")]
+    pub font: Handle<Font>,
 }
 
-impl UnitModelResource for AnimusAssets {
+impl UnitAssetResource for AnimusAssets {
     fn model_handle(&self) -> Handle<WorldAsset> {
         self.animus.clone()
+    }
+
+    fn font_handle(&self) -> Option<Handle<Font>> {
+        Some(self.font.clone())
     }
 }
 
@@ -90,7 +96,6 @@ impl UnitType for Animus {
     FrontTarget,
     SingleTarget,
     LineOfSight,
-    CardArt("abyss"),
 )]
 pub struct Smash;
 

@@ -6,14 +6,14 @@ use bevy_hanabi::prelude::*;
 
 use crate::{
     actions::{
-        Action, ActionType, CardArt, OwnedByUnit, Played, Target,
+        Action, ActionType, OwnedByUnit, Played, Target,
         tags::{FrontTarget, LineOfSight, SingleTarget},
     },
     asset::{EllipsoidBackfaceDepthModifier, GameState},
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap},
     field::OccupiedByUnit,
     turn::Player,
-    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitPriority, UnitType},
+    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitAssetResource, UnitPriority, UnitType},
 };
 
 pub struct PresencePlugin;
@@ -129,7 +129,7 @@ pub struct PresenceAssets {
     pub smoke: Handle<Image>,
 }
 
-impl UnitModelResource for PresenceAssets {
+impl UnitAssetResource for PresenceAssets {
     fn model_handle(&self) -> Handle<WorldAsset> {
         self.presence.clone()
     }
@@ -166,7 +166,6 @@ impl UnitType for Presence {
     FrontTarget,
     SingleTarget,
     LineOfSight,
-    CardArt("abyss"),
 )]
 pub struct Smash;
 

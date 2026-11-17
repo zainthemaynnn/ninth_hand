@@ -343,33 +343,43 @@ pub fn spawn_at_location<T: UnitType + Default>(
     let mut graph = AnimationGraph::new();
     let animations = T::Animations::new(&assets, &mut graph);
 
-    Ok(commands
-        .spawn((
-            T::default(),
-            WorldAssetRoot(assets.model_handle()),
-            OccupyingCell(*e_cell),
-            AnimatorInitializer {
-                graph: graphs.add(graph),
-                idle: animations.idle(),
-            },
-        ))
-        .id())
+    let mut entity = commands.spawn((
+        T::default(),
+        WorldAssetRoot(assets.model_handle()),
+        OccupyingCell(*e_cell),
+        AnimatorInitializer {
+            graph: graphs.add(graph),
+            idle: animations.idle(),
+        },
+    ));
+
+    if let Some(h_font) = assets.font_handle() {
+        entity.insert(UnitFont(h_font));
+    }
+
+    Ok(entity.id())
 }
 
-pub trait UnitModelResource: Resource {
+pub trait UnitAssetResource: Resource {
     fn model_handle(&self) -> Handle<WorldAsset>;
+    fn font_handle(&self) -> Option<Handle<Font>> {
+        None
+    }
 }
 
 pub trait UnitAnimations: Component {
-    type Assets: UnitModelResource;
+    type Assets: UnitAssetResource;
     fn new(assets: &Self::Assets, graph: &mut AnimationGraph) -> Self;
     fn idle(&self) -> Option<Vec<AnimationNodeIndex>>;
 }
 
 pub trait UnitType: Component {
-    type ModelResource: UnitModelResource;
+    type ModelResource: UnitAssetResource;
     type Animations: UnitAnimations<Assets = Self::ModelResource>;
 }
 
 #[derive(Component, Debug, Clone)]
 pub struct UnitColor(pub Color);
+
+#[derive(Component, Debug, Clone)]
+pub struct UnitFont(pub Handle<Font>);

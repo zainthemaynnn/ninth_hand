@@ -15,14 +15,14 @@ use rand::RngExt;
 
 use crate::{
     actions::{
-        Action, ActionType, CardArt, OwnedByUnit, Played, Target,
+        Action, ActionType, OwnedByUnit, Played, Target,
         tags::{self, *},
     },
     asset::{GameState, MaterialBaseColorLens},
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
     field::{FieldCell, OccupiedByUnit},
     turn::Player,
-    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitPriority, UnitType},
+    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitAssetResource, UnitPriority, UnitType},
 };
 
 pub struct SymmetraPlugin;
@@ -79,11 +79,17 @@ pub struct SymmetraAssets {
     pub idle: Handle<AnimationClip>,
     #[asset(path = "audio/glyph.wav")]
     pub glyph: Handle<AudioSource>,
+    #[asset(path = "img/font/frostbite/FROSTBITE-Narrow.ttf")]
+    pub font: Handle<Font>,
 }
 
-impl UnitModelResource for SymmetraAssets {
+impl UnitAssetResource for SymmetraAssets {
     fn model_handle(&self) -> Handle<WorldAsset> {
         self.symmetra.clone()
+    }
+
+    fn font_handle(&self) -> Option<Handle<Font>> {
+        Some(self.font.clone())
     }
 }
 
@@ -200,7 +206,6 @@ impl SimpleGlyph for GreenGlyph {
 	CellTarget,
 	CellEffect,
 	tags::Glyph,
-	CardArt("shapes"),
 )]
 pub struct SummonRedGlyph;
 
@@ -230,7 +235,6 @@ impl ActionType for SummonRedGlyph {
 	CellTarget,
 	CellEffect,
 	tags::Glyph,
-	CardArt("shapes"),
 )]
 pub struct SummonBlueGlyph;
 
@@ -260,7 +264,6 @@ impl ActionType for SummonBlueGlyph {
 	CellTarget,
 	CellEffect,
 	tags::Glyph,
-	CardArt("shapes"),
 )]
 pub struct SummonGreenGlyph;
 

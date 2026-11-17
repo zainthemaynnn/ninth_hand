@@ -10,7 +10,7 @@ use bevy_hanabi::{
 
 use crate::{
     actions::{
-        Action, ActionType, CardArt, OwnedByUnit, Played, Target,
+        Action, ActionType, OwnedByUnit, Played, Target,
         tags::{LineOfSight, SingleTarget},
     },
     asset::GameState,
@@ -18,7 +18,7 @@ use crate::{
     field::OccupiedByUnit,
     systems::find_named_node,
     turn::Player,
-    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitPriority, UnitType},
+    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitAssetResource, UnitPriority, UnitType},
 };
 
 pub struct FractalPlugin;
@@ -35,7 +35,7 @@ impl Plugin for FractalPlugin {
 #[derive(Component, Default)]
 #[require(
     Unit,
-    UnitPriority(4),
+    UnitPriority(7),
     Player,
     UnitDesc {
         name: "Fractal",
@@ -58,7 +58,7 @@ pub struct FractalAssets {
     pub glitch: Handle<Image>,
 }
 
-impl UnitModelResource for FractalAssets {
+impl UnitAssetResource for FractalAssets {
     fn model_handle(&self) -> Handle<WorldAsset> {
         self.fractal.clone()
     }
@@ -117,7 +117,6 @@ pub fn spawn_fractal_head(In(result): In<Result<Entity>>, mut commands: Commands
     Damage,
     SingleTarget,
     LineOfSight,
-    CardArt("abyss"),
 )]
 pub struct Smash;
 

@@ -3,14 +3,14 @@ use bevy_asset_loader::prelude::*;
 
 use crate::{
     actions::{
-        Action, ActionType, CardArt, OwnedByUnit, Played, Target,
+        Action, ActionType, OwnedByUnit, Played, Target,
         tags::{FrontTarget, LineOfSight, SingleTarget},
     },
     asset::GameState,
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
     field::OccupiedByUnit,
     turn::Player,
-    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitPriority, UnitType},
+    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitAssetResource, UnitPriority, UnitType},
 };
 
 pub struct ImpiPlugin;
@@ -50,11 +50,17 @@ pub struct ImpiAssets {
     pub impi: Handle<WorldAsset>,
     #[asset(path = "gltf/impi.glb#Animation0")]
     pub idle: Handle<AnimationClip>,
+    #[asset(path = "img/font/special-elite-font/SpecialElite-YOGj.ttf")]
+    pub font: Handle<Font>,
 }
 
-impl UnitModelResource for ImpiAssets {
+impl UnitAssetResource for ImpiAssets {
     fn model_handle(&self) -> Handle<WorldAsset> {
         self.impi.clone()
+    }
+
+    fn font_handle(&self) -> Option<Handle<Font>> {
+        Some(self.font.clone())
     }
 }
 
@@ -84,16 +90,15 @@ impl UnitType for Impi {
 
 #[derive(Component)]
 #[require(
-    Action { name: "Fork", description: "Damage 3 front and behind" },
+    Action { name: "Poke", description: "Damage 3 front and behind" },
     Damage,
     FrontTarget,
     SingleTarget,
     LineOfSight,
-    CardArt("abyss"),
 )]
-pub struct Fork;
+pub struct Poke;
 
-impl ActionType for Fork {
+impl ActionType for Poke {
     fn play() -> Observer {
         Observer::new(
             |trigger: On<Played>,

@@ -14,13 +14,13 @@ use bevy_tweening::{
 };
 
 use crate::{
-    actions::{Action, ActionType, CardArt, Played, SecondaryTarget, Target, tags::*},
+    actions::{Action, ActionType, Played, SecondaryTarget, Target, tags::*},
     asset::{AnimatorEntity, AnimatorInitializer, GameState},
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, KillingSomething, Resist},
     field::{HexCoord, MovementEvent, OccupiedByUnit},
     status::{Mark, Stacks},
     turn::{Killed, Player, TurnHanger},
-    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitPriority, UnitType},
+    unit::{Unit, UnitAnimations, UnitAssetResource, UnitColor, UnitDesc, UnitPriority, UnitType},
 };
 
 pub struct NinePlugin;
@@ -58,11 +58,17 @@ pub struct NineAssets {
     pub hand_fist: Handle<AnimationClip>,
     #[asset(path = "img/particles/kenney/PNG (Transparent)/circle_05.png")]
     pub smoke: Handle<Image>,
+    #[asset(path = "img/font/monteiro-lobato-font/MonteiroLobato-4on9.ttf")]
+    pub font: Handle<Font>,
 }
 
-impl UnitModelResource for NineAssets {
+impl UnitAssetResource for NineAssets {
     fn model_handle(&self) -> Handle<WorldAsset> {
         self.nine_model.clone()
+    }
+
+    fn font_handle(&self) -> Option<Handle<Font>> {
+        Some(self.font.clone())
     }
 }
 
@@ -224,7 +230,6 @@ pub fn reset_hand_to_rest_position(
 	FrontTarget,
 	SingleTarget,
 	LineOfSight,
-	CardArt("abyss"),
 )]
 pub struct Crush;
 
@@ -329,7 +334,6 @@ impl ActionType for Crush {
     LineOfSight,
     MultiHit,
     HasSecondaryTarget,
-    CardArt("abyss"),
 )]
 pub struct Slap;
 
@@ -381,7 +385,6 @@ impl ActionType for Slap {
     FrontTarget,
     SingleTarget,
     LineOfSight,
-    CardArt("abyss"),
 )]
 pub struct Gaze;
 

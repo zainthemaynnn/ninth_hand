@@ -277,9 +277,9 @@ fn entry(
     let e_impi = impi_query.into_inner();
 
     commands
-        .spawn((crate::character::impi::Fork, OwnedByUnit(e_impi)))
+        .spawn((crate::character::impi::Poke, OwnedByUnit(e_impi)))
         .with_children(|parent| {
-            parent.spawn(crate::character::impi::Fork::play().with_entity(parent.target_entity()));
+            parent.spawn(crate::character::impi::Poke::play().with_entity(parent.target_entity()));
         });
 
     let e_animus = animus_query.into_inner();

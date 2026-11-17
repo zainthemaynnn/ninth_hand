@@ -3,14 +3,14 @@ use bevy_asset_loader::prelude::*;
 
 use crate::{
     actions::{
-        Action, ActionType, CardArt, OwnedByUnit, Played, Target,
+        Action, ActionType, OwnedByUnit, Played, Target,
         tags::{FrontTarget, LineOfSight, SingleTarget},
     },
     asset::GameState,
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
     field::OccupiedByUnit,
     turn::Player,
-    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitModelResource, UnitPriority, UnitType},
+    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitAssetResource, UnitPriority, UnitType},
 };
 
 pub struct GreasePlugin;
@@ -26,7 +26,7 @@ impl Plugin for GreasePlugin {
 #[derive(Component, Default)]
 #[require(
     Unit,
-    UnitPriority(4),
+    UnitPriority(6),
     Player,
     UnitDesc {
         name: "Grease",
@@ -53,7 +53,7 @@ pub struct GreaseAssets {
     pub idle: Handle<AnimationClip>,
 }
 
-impl UnitModelResource for GreaseAssets {
+impl UnitAssetResource for GreaseAssets {
     fn model_handle(&self) -> Handle<WorldAsset> {
         self.grease.clone()
     }
@@ -90,7 +90,6 @@ impl UnitType for Grease {
     FrontTarget,
     SingleTarget,
     LineOfSight,
-    CardArt("abyss"),
 )]
 pub struct Slime;
 
