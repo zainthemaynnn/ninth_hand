@@ -18,7 +18,7 @@ use crate::{
     field::OccupiedByUnit,
     systems::find_named_node,
     turn::Player,
-    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitAssetResource, UnitPriority, UnitType},
+    unit::{Unit, UnitAnimations, UnitAssetResource, UnitColor, UnitDesc, UnitPriority, UnitType},
 };
 
 pub struct FractalPlugin;

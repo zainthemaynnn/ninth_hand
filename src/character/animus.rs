@@ -10,7 +10,7 @@ use crate::{
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},
     field::OccupiedByUnit,
     turn::Player,
-    unit::{Unit, UnitAnimations, UnitColor, UnitDesc, UnitAssetResource, UnitPriority, UnitType},
+    unit::{Unit, UnitAnimations, UnitAssetResource, UnitColor, UnitDesc, UnitPriority, UnitType},
 };
 
 pub struct AnimusPlugin;

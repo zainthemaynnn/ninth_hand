@@ -1,8 +1,8 @@
-use std::time::Duration;
+use std::{f32::consts::TAU, time::Duration};
 
-use bevy::prelude::*;
+use bevy::{ecs::system::BoxedSystem, prelude::*};
 use bevy_asset_loader::prelude::*;
-use bevy_tweening::{PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
+use bevy_tweening::{Lens, PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
 
 use crate::{
     actions::{
@@ -11,7 +11,7 @@ use crate::{
     asset::{GameState, UiRightLens},
     damage::Dead,
     systems::countdown_to_state,
-    ui::UiRumble,
+    ui::{UiRumble, wheel},
 };
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, SubStates)]
@@ -38,11 +38,15 @@ impl Plugin for TurnPlugin {
             .configure_loading_state(
                 LoadingStateConfig::new(GameState::AssetLoading).load_collection::<TurnUiAssets>(),
             )
-            .add_systems(OnEnter(GameState::InGame), insert_player_turn_button)
+            .add_systems(
+                OnEnter(GameState::InGame),
+                (insert_player_turn_button, spawn_turn_wheel),
+            )
             .add_systems(
                 OnEnter(TurnState::PlayerStart),
                 (
                     (
+                        sync_wheel_rotation_to_turn_state(Rot2::radians(2.0 * TAU / 3.0)),
                         set_ally_rival::<Player, Cpu>,
                         show_player_turn_button,
                         (draw_actions::<Player>, shuffle_selected_actions).chain(),
@@ -85,6 +89,7 @@ impl Plugin for TurnPlugin {
             .add_systems(
                 OnEnter(TurnState::CpuStart),
                 (
+                    sync_wheel_rotation_to_turn_state(Rot2::radians(0.0)),
                     set_ally_rival::<Cpu, Player>,
                     remove_all_available_actions,
                     (draw_actions::<Cpu>, shuffle_selected_actions).chain(),
@@ -95,14 +100,36 @@ impl Plugin for TurnPlugin {
                 ),
             )
             // placeholders for now
-            .add_systems(OnEnter(TurnState::Neutral), advance_neutral_turn);
+            .add_systems(
+                Update,
+                (|| TurnState::Neutral)
+                    .pipe(countdown_to_state::<1000, _>)
+                    .run_if(in_state(TurnState::Cpu)),
+            )
+            .add_systems(
+                OnEnter(TurnState::Neutral),
+                (
+                    sync_wheel_rotation_to_turn_state(Rot2::radians(TAU / 3.0)),
+                    // advance_neutral_turn,
+                ),
+            )
+            .add_systems(
+                Update,
+                (|| TurnState::PlayerStart)
+                    .pipe(countdown_to_state::<1000, _>)
+                    .run_if(in_state(TurnState::Neutral)),
+            );
     }
 }
 
 #[derive(AssetCollection, Resource)]
-struct TurnUiAssets {
+pub struct TurnUiAssets {
     #[asset(path = "img/smile.png")]
-    pub _smile: Handle<Image>,
+    pub smile: Handle<Image>,
+    #[asset(path = "img/mortal.png")]
+    pub mortal: Handle<Image>,
+    #[asset(path = "img/terrain.png")]
+    pub terrain: Handle<Image>,
 }
 
 /// Describes components related to the current turn's player.
@@ -349,4 +376,69 @@ pub fn check_for_cpu_turn_done(
         info!("return to player state");
         next_state.set(TurnState::Cpu);
     }
+}
+
+#[derive(Component, Clone, Default)]
+pub struct TurnWheel;
+
+struct ClockwiseUiRotationLens {
+    start: f32,
+    end: f32,
+}
+
+impl Lens<UiTransform> for ClockwiseUiRotationLens {
+    fn lerp(&mut self, mut target: Mut<'_, UiTransform>, ratio: f32) {
+        target.rotation = Rot2::radians(self.start + (self.end - self.start) * ratio);
+    }
+}
+
+pub fn spawn_turn_wheel(mut commands: Commands, assets: Res<TurnUiAssets>) {
+    let radius = 120.0;
+    let diameter = radius * 2.0;
+
+    commands.spawn_scene(bsn! {
+        Node {
+            position_type: PositionType::Absolute,
+            top: percent(0.0),
+            left: percent(50.0),
+            width: px(diameter),
+            height: px(diameter),
+        }
+        UiTransform::from_translation(Val2::new(px(-radius), px(-radius)))
+
+        Children [
+            Node {
+                width: px(diameter),
+                height: px(diameter),
+            }
+            TurnWheel
+
+            Children [
+                wheel::wheel(
+                    radius,
+                    80.0,
+                    vec![assets.terrain.clone(), assets.mortal.clone(), assets.smile.clone()],
+                ),
+            ]
+        ]
+    });
+}
+
+pub fn sync_wheel_rotation_to_turn_state(rotation: Rot2) -> BoxedSystem {
+    Box::new(IntoSystem::into_system(
+        move |mut commands: Commands, wheel: Single<(Entity, &UiTransform), With<TurnWheel>>| {
+            let (e_wheel, transform) = wheel.into_inner();
+            let start = transform.rotation.as_radians().rem_euclid(TAU);
+            let mut end = rotation.as_radians().rem_euclid(TAU);
+            if end < start {
+                end += TAU;
+            }
+            let tween = Tween::new(
+                EaseFunction::QuadraticIn,
+                Duration::from_millis(600),
+                ClockwiseUiRotationLens { start, end },
+            );
+            commands.entity(e_wheel).insert(TweenAnim::new(tween));
+        },
+    ))
 }

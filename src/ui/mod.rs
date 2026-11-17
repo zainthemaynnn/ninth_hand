@@ -7,6 +7,8 @@ use bevy_tweening::{
 };
 use noisy_bevy::simplex_noise_2d;
 
+pub mod wheel;
+
 pub struct NineUiPlugin;
 
 impl Plugin for NineUiPlugin {
