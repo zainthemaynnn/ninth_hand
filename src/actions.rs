@@ -13,7 +13,7 @@ use crate::{
     asset::GameState,
     field::{Field, HexCoord, HighlightedCell, Highlighter, OccupyingCell},
     turn::{Cpu, Player, Rival, TurnState},
-    unit::{Unit, UnitDesc, UnitPriority},
+    unit::{Unit, UnitColor, UnitFont, UnitPriority},
 };
 
 const CARD_STICKOUT: Val = Val::Percent(50.0);
@@ -23,20 +23,25 @@ pub struct ActionPlugin;
 impl Plugin for ActionPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<DrawEvent>()
+            .add_observer(add_default_card_art)
             .add_systems(OnEnter(GameState::InGame), set_action_bar)
             .add_systems(
                 Update,
-                (update_action_bar, select_deselect_card).run_if(in_state(GameState::InGame)),
+                (
+                    update_action_bar,
+                    select_deselect_card,
+                    deselect_action_on_card_deselect.after(select_deselect_card),
+                    select_action_on_card_select.after(deselect_action_on_card_deselect),
+                )
+                    .run_if(in_state(GameState::InGame)),
             )
             .add_observer(select_card_animation.run_if(in_state(TurnState::Player)))
             .add_observer(deselect_card_animation.run_if(in_state(TurnState::Player)))
-            .add_observer(select_action_on_card_select)
-            .add_observer(deselect_action_on_card_deselect)
             .add_observer(deselect_action_cells_on_deselect)
-            .add_observer(highlight_action_owner_cell)
-            .add_observer(highlight_front_target_cells)
-            .add_observer(highlight_cell_target_cells)
-            .add_observer(highlight_secondary_target_cells)
+            .add_observer(active_unit_target)
+            .add_observer(front_target)
+            .add_observer(cell_target)
+            .add_observer(secondary_target)
             .add_observer(add_target_on_click)
             .add_observer(add_secondary_target_on_click)
             .add_observer(play_primary_target_action)
@@ -53,6 +58,20 @@ impl Plugin for ActionPlugin {
 pub struct Action {
     pub name: &'static str,
     pub description: &'static str,
+}
+
+/// Give actions without explicitly assigned art a card art key based on their name.
+pub fn add_default_card_art(
+    trigger: On<Add, Action>,
+    mut commands: Commands,
+    action_query: Query<(&Action, Option<&CardArt>)>,
+) {
+    let Ok((action, None)) = action_query.get(trigger.entity) else {
+        return;
+    };
+
+    let art_key = action.name.to_lowercase().replace(" ", "").leak();
+    commands.entity(trigger.entity).insert(CardArt(art_key));
 }
 
 pub trait ActionType {
@@ -223,6 +242,11 @@ pub struct SecondTargettable;
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
+#[require(HighlightedCell { ty: Highlighter::Blue })]
+pub struct ActiveUnitCell;
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
 pub struct Target;
 
 #[derive(Component, Debug, Default)]
@@ -253,8 +277,7 @@ pub struct UnitOwnsActionBar(Entity);
 
 pub fn set_action_bar(
     mut commands: Commands,
-    assets: Res<CardAssets>,
-    unit_query: Query<(Entity, &UnitDesc, &UnitPriority), With<Player>>,
+    unit_query: Query<(Entity, &UnitColor, &UnitPriority), With<Player>>,
 ) {
     commands
         .spawn(Node {
@@ -268,19 +291,21 @@ pub fn set_action_bar(
             ..Default::default()
         })
         .with_children(move |parent| {
-            for (e_unit, UnitDesc { name, .. }, _) in
+            for (e_unit, UnitColor(color), _) in
                 unit_query
                     .iter()
-                    .sort_by::<(Entity, &UnitDesc, &UnitPriority)>(
+                    .sort_by::<(Entity, &UnitColor, &UnitPriority)>(
                         |(_, _, UnitPriority(p0)), (_, _, UnitPriority(p1))| p0.cmp(p1),
                     )
             {
+                /*
                 let slicer = TextureSlicer {
                     border: BorderRect::all(20.0),
                     center_scale_mode: SliceScaleMode::Tile { stretch_value: 1.0 },
                     sides_scale_mode: SliceScaleMode::Tile { stretch_value: 1.0 },
                     ..Default::default()
                 };
+                */
                 parent.spawn((
                     ActionBar,
                     Node {
@@ -292,15 +317,13 @@ pub fn set_action_bar(
                         justify_content: JustifyContent::SpaceEvenly,
                         ..Default::default()
                     },
-                    ImageNode {
-                        image: assets
-                            .patterns
-                            .get(name.to_lowercase().as_str())
-                            .unwrap()
-                            .clone(),
-                        image_mode: NodeImageMode::Sliced(slicer),
-                        ..Default::default()
-                    },
+                    BackgroundColor(*color),
+                    // Nine slice background, disabled for now:
+                    // ImageNode {
+                    //     image: assets.patterns.get(name.to_lowercase().as_str()).unwrap().clone(),
+                    //     image_mode: NodeImageMode::Sliced(slicer),
+                    //     ..Default::default()
+                    // },
                     ActionBarOwnedByUnit(e_unit),
                 ));
             }
@@ -311,77 +334,104 @@ pub fn update_action_bar(
     mut commands: Commands,
     card_assets: Res<CardAssets>,
     actions_query: Query<(Entity, &Action, &CardArt, &OwnedByUnit), Added<AvailableAction>>,
-    action_bar_query: Query<&UnitOwnsActionBar>,
+    unit_query: Query<(&UnitFont, &UnitOwnsActionBar)>,
 ) {
     for (e_action, action, card_art, owned_by) in actions_query {
-        let owns = action_bar_query.get(owned_by.get()).unwrap();
-        commands.entity(owns.0).with_children(|parent| {
-            let mut selection_tween = TweenAnim::new(Tween::new(
-                EaseFunction::QuadraticOut,
-                Duration::from_millis(2000),
-                UiPositionLens {
-                    start: UiRect::bottom(Val::Percent(0.0)).with_top(Val::Percent(0.0)),
-                    end: UiRect::bottom(CARD_STICKOUT).with_top(-CARD_STICKOUT),
-                },
-            ))
-            .with_destroy_on_completed(false);
-            selection_tween.stop();
+        let (font, owns) = unit_query.get(owned_by.get()).unwrap();
+        let mut selection_tween = TweenAnim::new(Tween::new(
+            EaseFunction::QuadraticOut,
+            Duration::from_millis(2000),
+            UiPositionLens {
+                start: UiRect::bottom(Val::Percent(0.0)).with_top(Val::Percent(0.0)),
+                end: UiRect::bottom(CARD_STICKOUT).with_top(-CARD_STICKOUT),
+            },
+        ))
+        .with_destroy_on_completed(false);
+        selection_tween.stop();
 
-            parent
-                .spawn((
-                    ActionCard,
-                    OwnedByAction(e_action),
+        commands
+            .spawn_scene(bsn! {
+                Node {
+                    position_type: PositionType::Relative,
+                    height: Val::Px(240.0),
+                    width: Val::Px(180.0),
+                    bottom: Val::Percent(0.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    flex_direction: FlexDirection::Column,
+                    border_radius: BorderRadius::all(Val::Px(16.0)),
+                }
+            })
+            .insert((
+                ChildOf(owns.0),
+                ActionCard,
+                OwnedByAction(e_action),
+                ImageNode::new(
+                    card_assets
+                        .card_art
+                        .get(card_art.0)
+                        .expect(format!("missing card art {0}", card_art.0).as_str())
+                        .clone(),
+                ),
+                Interaction::default(),
+                UiTransform::default(),
+                selection_tween,
+            ))
+            .with_children(|parent| {
+                parent.spawn((
+                    Text::new(action.name),
                     Node {
-                        position_type: PositionType::Relative,
-                        width: Val::Auto,
-                        height: Val::Percent(100.0),
-                        bottom: Val::Percent(0.0),
-                        aspect_ratio: Some(400.0 / 300.0),
-                        justify_content: JustifyContent::Center,
-                        align_items: AlignItems::Center,
-                        flex_direction: FlexDirection::Column,
-                        border_radius: BorderRadius::all(Val::Px(16.0)),
-                        ..Default::default()
+                        width: Val::Percent(85.0),
+                        flex_shrink: 1.0,
+                        ..default()
                     },
-                    ImageNode::new(card_assets.card_art.get(card_art.0).unwrap().clone()),
-                    Interaction::default(),
-                    UiTransform::default(),
-                    selection_tween,
-                ))
-                .with_children(|parent| {
-                    parent.spawn((
-                        Text::new(action.name),
-                        TextFont {
-                            font_size: FontSize::Px(20.0),
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                    ));
-                    parent.spawn((
-                        Text::new(action.description),
-                        TextFont {
-                            font_size: FontSize::Px(16.0),
-                            ..default()
-                        },
-                        TextColor(Color::WHITE),
-                    ));
-                });
-        });
+                    TextFont {
+                        font: FontSource::Handle(font.0.clone()),
+                        font_size: FontSize::Px(20.0),
+                        ..default()
+                    },
+                    TextLayout {
+                        justify: Justify::Center,
+                        linebreak: LineBreak::WordBoundary,
+                    },
+                    TextColor(Color::WHITE),
+                ));
+                parent.spawn((
+                    Text::new(action.description),
+                    Node {
+                        width: Val::Percent(85.0),
+                        flex_shrink: 1.0,
+                        ..default()
+                    },
+                    TextFont {
+                        font: FontSource::Handle(font.0.clone()),
+                        font_size: FontSize::Px(16.0),
+                        ..default()
+                    },
+                    TextLayout {
+                        justify: Justify::Center,
+                        linebreak: LineBreak::WordBoundary,
+                    },
+                    TextColor(Color::WHITE),
+                ));
+            });
     }
 }
 
 pub fn select_deselect_card(
     mut commands: Commands,
-    interaction_query: Query<
-        (Entity, &Interaction, Option<&SelectedCard>),
-        (Changed<Interaction>, With<ActionCard>),
-    >,
+    interaction_query: Query<(Entity, &Interaction), (Changed<Interaction>, With<ActionCard>)>,
+    selected_query: Query<Entity, With<SelectedCard>>,
 ) {
-    for (e_card, interaction, selected) in interaction_query {
+    for (e_card, interaction) in interaction_query {
         match *interaction {
             Interaction::Pressed => {
-                if selected.is_none() {
+                if !selected_query.contains(e_card) {
                     commands.entity(e_card).insert(SelectedCard);
+
+                    if let Ok(e_selected) = selected_query.single() {
+                        commands.entity(e_selected).remove::<SelectedCard>();
+                    }
                 } else {
                     commands.entity(e_card).remove::<SelectedCard>();
                 }
@@ -393,8 +443,6 @@ pub fn select_deselect_card(
 
 pub fn select_card_animation(
     trigger: On<Add, SelectedCard>,
-    mut commands: Commands,
-    selected_query: Query<Entity, With<SelectedCard>>,
     mut anim_query: Query<&mut TweenAnim>,
 ) {
     let mut selection_tween = Tween::new(
@@ -412,14 +460,6 @@ pub fn select_card_animation(
         .set_tweenable(selection_tween.with_playback_direction(PlaybackDirection::Forward))
         .unwrap();
     tween_anim.playback_state = PlaybackState::Playing;
-
-    for e_old in selected_query {
-        if e_old == trigger.entity {
-            continue;
-        }
-
-        commands.entity(e_old).remove::<SelectedCard>();
-    }
 }
 
 pub fn deselect_card_animation(
@@ -444,24 +484,28 @@ pub fn deselect_card_animation(
 }
 
 pub fn select_action_on_card_select(
-    trigger: On<Add, SelectedCard>,
     mut commands: Commands,
-    card_query: Query<&OwnedByAction>,
+    added_cards: Query<(Entity, &OwnedByAction), Added<SelectedCard>>,
 ) {
-    let OwnedByAction(e_action) = card_query.get(trigger.entity).unwrap();
-    commands.entity(*e_action).insert(SelectedAction);
+    for (_, OwnedByAction(e_action)) in &added_cards {
+        commands.entity(*e_action).insert(SelectedAction);
+    }
 }
 
 pub fn deselect_action_on_card_deselect(
-    trigger: On<Remove, SelectedCard>,
     mut commands: Commands,
+    mut removed_cards: RemovedComponents<SelectedCard>,
     card_query: Query<&OwnedByAction>,
 ) {
-    let OwnedByAction(e_action) = card_query.get(trigger.entity).unwrap();
-    commands.entity(*e_action).remove::<SelectedAction>();
+    for e_card in removed_cards.read() {
+        let Ok(OwnedByAction(e_action)) = card_query.get(e_card) else {
+            continue;
+        };
+        commands.entity(*e_action).remove::<SelectedAction>();
+    }
 }
 
-pub fn highlight_action_owner_cell(
+pub fn active_unit_target(
     trigger: On<Add, SelectedAction>,
     mut commands: Commands,
     action_query: Query<&OwnedByUnit>,
@@ -477,9 +521,7 @@ pub fn highlight_action_owner_cell(
         return;
     };
 
-    commands.entity(*e_cell).insert(HighlightedCell {
-        ty: Highlighter::Blue,
-    });
+    commands.entity(*e_cell).insert(ActiveUnitCell);
     info!("highlighted selected action owner");
 }
 
@@ -495,7 +537,7 @@ pub fn deselect_action_cells_on_deselect(
     }
 }
 
-pub fn highlight_front_target_cells(
+pub fn front_target(
     trigger: On<Add, SelectedAction>,
     mut commands: Commands,
     target_query: Query<(), With<FrontTarget>>,
@@ -526,7 +568,7 @@ pub fn highlight_front_target_cells(
     }
 }
 
-pub fn highlight_cell_target_cells(
+pub fn cell_target(
     trigger: On<Add, SelectedAction>,
     mut commands: Commands,
     target_query: Query<(), With<CellTarget>>,
@@ -538,6 +580,25 @@ pub fn highlight_cell_target_cells(
 
     for e_cell in field.cells.values() {
         commands.entity(*e_cell).insert(Targettable);
+    }
+}
+
+// TODO: depending on the target, need to pick the right field
+pub fn secondary_target(
+    trigger: On<Add, Target>,
+    mut commands: Commands,
+    field: Res<Field<Cpu>>,
+    target_query: Query<&HexCoord>,
+    action_query: Query<(), (With<SelectedAction>, With<HasSecondaryTarget>)>,
+) {
+    let Ok(()) = action_query.single() else {
+        return;
+    };
+
+    let coord = target_query.get(trigger.entity).unwrap();
+
+    for e_adj in field.all_adjacent(*coord, HexCoord::DIRECTIONS.to_vec()) {
+        commands.entity(e_adj).insert(SecondTargettable);
     }
 }
 
@@ -577,25 +638,6 @@ pub fn play_primary_target_action(
 
     commands.trigger(Played { entity: e_action });
     next_state.set(TurnState::PlayerBusy);
-}
-
-// TODO: depending on the target, need to pick the right field
-pub fn highlight_secondary_target_cells(
-    trigger: On<Add, Target>,
-    mut commands: Commands,
-    field: Res<Field<Cpu>>,
-    target_query: Query<&HexCoord>,
-    action_query: Query<(), (With<SelectedAction>, With<HasSecondaryTarget>)>,
-) {
-    let Ok(()) = action_query.single() else {
-        return;
-    };
-
-    let coord = target_query.get(trigger.entity).unwrap();
-
-    for e_adj in field.all_adjacent(*coord, HexCoord::DIRECTIONS.to_vec()) {
-        commands.entity(e_adj).insert(SecondTargettable);
-    }
 }
 
 pub fn play_secondary_target_action(
