@@ -1,8 +1,8 @@
 pub mod animus;
+pub mod carty;
 pub mod fractal;
 pub mod grease;
 pub mod impi;
-pub mod mary;
 pub mod nine;
 pub mod presence;
 pub mod symmetra;
@@ -20,7 +20,7 @@ impl PluginGroup for CharacterPlugins {
             .add(animus::AnimusPlugin)
             .add(grease::GreasePlugin)
             .add(presence::PresencePlugin)
-            .add(mary::MaryPlugin)
+            .add(carty::CartyPlugin)
             .add(fractal::FractalPlugin)
     }
 }

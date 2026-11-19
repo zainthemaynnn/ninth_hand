@@ -15,8 +15,8 @@ use crate::{
     actions::{ActionPlugin, ActionType, OwnedByUnit},
     asset::{GameState, NineAssetPlugin},
     character::{
-        CharacterPlugins, animus::Animus, fractal::Fractal, grease::Grease, impi::Impi, mary::Mary,
-        nine::Nine, presence::Presence, symmetra::Symmetra,
+        CharacterPlugins, animus::Animus, carty::Carty, fractal::Fractal, grease::Grease,
+        impi::Impi, nine::Nine, presence::Presence, symmetra::Symmetra,
     },
     damage::DamagePlugin,
     director::DirectorPlugin,
@@ -111,8 +111,8 @@ fn main() {
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Presence>)
                     .pipe(character::presence::spawn_presence_smoke),
                 (|| HexCoord::new(0, -2))
-                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Mary>)
-                    .pipe(|_in: In<Result<Entity>>| {}),
+                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Carty>)
+                    .pipe(character::carty::spawn_flame),
                 (|| HexCoord::new(1, -4))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Fractal>)
                     .pipe(character::fractal::spawn_fractal_head),
