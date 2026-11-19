@@ -3,8 +3,9 @@ use bevy_asset_loader::prelude::*;
 
 use crate::{
     actions::{
-        Action, ActionType, OwnedByUnit, Played, Target,
+        action::{Action, ActionType, OwnedByUnit, Played},
         tags::{FrontTarget, LineOfSight, SingleTarget},
+        target::Target,
     },
     asset::GameState,
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},

@@ -15,8 +15,9 @@ use rand::RngExt;
 
 use crate::{
     actions::{
-        Action, ActionType, OwnedByUnit, Played, Target,
+        action::{Action, ActionType, OwnedByUnit, Played},
         tags::{self, *},
+        target::Target,
     },
     asset::{GameState, MaterialBaseColorLens},
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap, Resist},

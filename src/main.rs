@@ -4,7 +4,7 @@
 
 use bevy::{
     color::palettes::css::SILVER,
-    gltf::{GltfPlugin, convert_coordinates::GltfConvertCoordinates},
+    gltf::{convert_coordinates::GltfConvertCoordinates, GltfPlugin},
     post_process::bloom::Bloom,
     prelude::*,
 };
@@ -12,16 +12,16 @@ use bevy_hanabi::prelude::*;
 use bevy_tweening::TweeningPlugin;
 
 use crate::{
-    actions::{ActionPlugin, ActionType, OwnedByUnit},
+    actions::action::{ActionPlugin, ActionType, OwnedByUnit},
     asset::{GameState, NineAssetPlugin},
     character::{
-        CharacterPlugins, animus::Animus, carty::Carty, fractal::Fractal, grease::Grease,
-        impi::Impi, nine::Nine, presence::Presence, symmetra::Symmetra,
+        animus::Animus, carty::Carty, fractal::Fractal, grease::Grease, impi::Impi, nine::Nine,
+        presence::Presence, symmetra::Symmetra, CharacterPlugins,
     },
     damage::DamagePlugin,
     director::DirectorPlugin,
-    enemy::{EnemyAssets, EnemyPlugin, mortal::Mortal},
-    field::{Field, FieldPlugin, HexCoord, OccupyingCell, load_field},
+    enemy::{mortal::Mortal, EnemyAssets, EnemyPlugin},
+    field::{load_field, Field, FieldPlugin, HexCoord, OccupyingCell},
     status::StatusPlugin,
     turn::{Cpu, Player, TurnPlugin},
     ui::NineUiPlugin,
@@ -116,7 +116,7 @@ fn main() {
                 (|| HexCoord::new(1, -4))
                     .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Fractal>)
                     .pipe(character::fractal::spawn_fractal_head),
-                entry.before(actions::set_action_bar),
+                entry.before(actions::card::set_action_bar),
             )
                 .chain(),
         )

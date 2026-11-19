@@ -6,8 +6,9 @@ use bevy_hanabi::prelude::*;
 
 use crate::{
     actions::{
-        Action, ActionType, OwnedByUnit, Played, Target,
+        action::{Action, ActionType, OwnedByUnit, Played},
         tags::{FrontTarget, LineOfSight, SingleTarget},
+        target::Target,
     },
     asset::{EllipsoidBackfaceDepthModifier, GameState},
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap},

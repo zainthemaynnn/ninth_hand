@@ -10,8 +10,9 @@ use bevy_hanabi::{
 
 use crate::{
     actions::{
-        Action, ActionType, OwnedByUnit, Played, Target,
+        action::{Action, ActionType, OwnedByUnit, Played},
         tags::{LineOfSight, SingleTarget},
+        target::Target,
     },
     asset::GameState,
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap},

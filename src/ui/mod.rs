@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 use bevy_tweening::{
-    AnimCompletedEvent, AnimTarget, Tween, TweenAnim,
     lens::{TextColorLens, UiPositionLens},
+    AnimCompletedEvent, AnimTarget, Tween, TweenAnim,
 };
 use noisy_bevy::simplex_noise_2d;
 

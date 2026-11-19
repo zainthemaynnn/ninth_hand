@@ -2,8 +2,9 @@ use bevy::prelude::*;
 
 use crate::{
     actions::{
-        Action, ActionType, OwnedByUnit, Played, Target,
+        action::{Action, ActionType, OwnedByUnit, Played},
         tags::{self, *},
+        target::Target,
     },
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap},
     field::OccupiedByUnit,

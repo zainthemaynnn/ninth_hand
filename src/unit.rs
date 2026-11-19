@@ -1,7 +1,7 @@
 use bevy::{color::palettes, math::VectorSpace, prelude::*};
 
 use crate::{
-    actions::DrawCount,
+    actions::draw::DrawCount,
     asset::{AnimatorInitializer, GameState},
     damage::{DamageAssets, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
     field::{Field, HexCoord, HoveredCell, MovementStack, OccupiedByUnit, OccupyingCell},
