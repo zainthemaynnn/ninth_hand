@@ -1,0 +1,5 @@
+- generally, you should prefer `let x = Ok(...) else { return; };` over `if let Ok(...) = x { ... }` to save on indentation. also add log statements within the error guards.
+- use `Default::default()` when filling in structs, not `default()`. that applies to any other functions you call to fill in a struct.
+- less of a style thing, but avoid `&mut World` wherever possible, it's unlikely that using it is necessary.
+- you can mostly avoid module re-exports, at least for now. it's simple enough to ask AI to fix imports if the absolute path changes.
+- unless it's a niche helper object, just make everything `pub`. I don't care.
