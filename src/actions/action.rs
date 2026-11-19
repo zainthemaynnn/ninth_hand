@@ -14,11 +14,21 @@ impl Plugin for ActionPlugin {
             .add_systems(
                 Update,
                 (
+                    target::update_front_can_target,
+                    target::update_cell_can_target,
+                    target::update_secondary_can_target,
+                )
+                    .chain(),
+            )
+            .add_systems(
+                Update,
+                (
                     card::update_action_bar,
                     card::select_deselect_card,
                     card::deselect_action_on_card_deselect.after(card::select_deselect_card),
                     card::select_action_on_card_select
-                        .after(card::deselect_action_on_card_deselect),
+                        .after(card::deselect_action_on_card_deselect)
+                        .after(target::update_secondary_can_target),
                     discard_deactivated_actions,
                 )
                     .run_if(
@@ -33,7 +43,6 @@ impl Plugin for ActionPlugin {
             .add_observer(target::active_unit_target)
             .add_observer(target::front_target)
             .add_observer(target::cell_target)
-            .add_observer(target::secondary_target)
             .add_observer(target::add_target_on_click)
             .add_observer(target::add_secondary_target_on_click)
             .add_observer(target::play_primary_target_action)

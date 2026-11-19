@@ -37,10 +37,16 @@ pub struct SecondaryTarget;
 #[require(HighlightedCell { ty: Highlighter::Gray })]
 pub struct Untargettable;
 
-fn front_target_candidates(
-    enemy_query: &Query<&OccupyingCell, (With<Unit>, With<Rival>)>,
-    cell_query: &Query<(Entity, &HexCoord)>,
-) -> Vec<Entity> {
+#[derive(Component, Debug, Default)]
+pub struct CanTarget {
+    pub cells: Vec<Entity>,
+}
+
+pub fn update_front_can_target(
+    mut action_query: Query<&mut CanTarget, With<FrontTarget>>,
+    enemy_query: Query<&OccupyingCell, (With<Unit>, With<Rival>)>,
+    cell_query: Query<(Entity, &HexCoord)>,
+) {
     let enemy_positions = enemy_query
         .iter()
         .filter_map(|OccupyingCell(e_cell)| {
@@ -51,35 +57,65 @@ fn front_target_candidates(
         })
         .collect::<Vec<_>>();
 
-    let Some(front_row) = enemy_positions.iter().map(|(_, row)| *row).max() else {
-        return Vec::new();
+    let front_cells = if let Some(front_row) = enemy_positions.iter().map(|(_, row)| *row).max() {
+        enemy_positions
+            .into_iter()
+            .filter_map(|(e_cell, row)| (row == front_row).then_some(e_cell))
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
     };
 
-    enemy_positions
-        .into_iter()
-        .filter_map(|(e_cell, row)| (row == front_row).then_some(e_cell))
-        .collect()
-}
-
-fn cell_target_candidates(field: &Field<Cpu>) -> Vec<Entity> {
-    field.cells.values().copied().collect()
-}
-
-fn secondary_target_candidates(
-    e_target: Entity,
-    field: &Field<Cpu>,
-    target_query: &Query<&HexCoord>,
-    action_query: &Query<(), (With<SelectedAction>, With<HasSecondaryTarget>)>,
-) -> Vec<Entity> {
-    if action_query.single().is_err() {
-        return Vec::new();
+    for mut can_target in &mut action_query {
+        can_target.cells.clone_from(&front_cells);
     }
+}
 
-    let Ok(coord) = target_query.get(e_target) else {
-        return Vec::new();
-    };
+pub fn update_cell_can_target(
+    mut action_query: Query<&mut CanTarget, With<CellTarget>>,
+    field: Option<Res<Field<Cpu>>>,
+) {
+    let cells = field
+        .map(|field| field.cells.values().copied().collect::<Vec<_>>())
+        .unwrap_or_default();
 
-    field.all_adjacent(*coord, HexCoord::DIRECTIONS.to_vec())
+    for mut can_target in &mut action_query {
+        can_target.cells.clone_from(&cells);
+    }
+}
+
+pub fn update_secondary_can_target(
+    mut commands: Commands,
+    mut action_query: Query<&mut CanTarget, (With<SelectedAction>, With<HasSecondaryTarget>)>,
+    field: Option<Res<Field<Cpu>>>,
+    target_query: Query<&HexCoord, With<Target>>,
+) {
+    let cells = field.and_then(|field| {
+        target_query
+            .single()
+            .ok()
+            .map(|coord| field.all_adjacent(*coord, HexCoord::DIRECTIONS.to_vec()))
+    });
+
+    for mut can_target in &mut action_query {
+        if let Some(cells) = &cells {
+            for e_old in can_target
+                .cells
+                .iter()
+                .filter(|e_old| !cells.contains(e_old))
+            {
+                commands.entity(*e_old).remove::<SecondTargettable>();
+            }
+            can_target.cells.clone_from(cells);
+            for &e_cell in cells {
+                commands.entity(e_cell).insert(SecondTargettable);
+            }
+        } else {
+            for e_old in can_target.cells.drain(..) {
+                commands.entity(e_old).remove::<SecondTargettable>();
+            }
+        }
+    }
 }
 
 pub fn active_unit_target(
@@ -110,22 +146,25 @@ pub fn deselect_action_cells_on_deselect(
     for e_cell in highlighted_query {
         commands
             .entity(e_cell)
-            .remove::<(HighlightedCell, Targettable)>();
+            .remove::<(HighlightedCell, Targettable, SecondTargettable)>();
     }
 }
 
 pub fn front_target(
     trigger: On<Add, SelectedAction>,
     mut commands: Commands,
-    target_query: Query<(), With<FrontTarget>>,
-    enemy_query: Query<&OccupyingCell, (With<Unit>, With<Rival>)>,
-    cell_query: Query<(Entity, &HexCoord)>,
+    tag_query: Query<(), With<FrontTarget>>,
+    can_target_query: Query<&CanTarget>,
 ) {
-    if !target_query.contains(trigger.entity) {
+    if !tag_query.contains(trigger.entity) {
         return;
     }
 
-    for e_cell in front_target_candidates(&enemy_query, &cell_query) {
+    let Ok(can_target) = can_target_query.get(trigger.entity) else {
+        return;
+    };
+
+    for &e_cell in &can_target.cells {
         commands.entity(e_cell).insert(Targettable);
     }
 }
@@ -133,28 +172,19 @@ pub fn front_target(
 pub fn cell_target(
     trigger: On<Add, SelectedAction>,
     mut commands: Commands,
-    target_query: Query<(), With<CellTarget>>,
-    field: Res<Field<Cpu>>,
+    tag_query: Query<(), With<CellTarget>>,
+    can_target_query: Query<&CanTarget>,
 ) {
-    if !target_query.contains(trigger.entity) {
+    if !tag_query.contains(trigger.entity) {
         return;
     }
 
-    for e_cell in cell_target_candidates(&field) {
-        commands.entity(e_cell).insert(Targettable);
-    }
-}
+    let Ok(can_target) = can_target_query.get(trigger.entity) else {
+        return;
+    };
 
-// TODO: depending on the target, need to pick the right field
-pub fn secondary_target(
-    trigger: On<Add, Target>,
-    mut commands: Commands,
-    field: Res<Field<Cpu>>,
-    target_query: Query<&HexCoord>,
-    action_query: Query<(), (With<SelectedAction>, With<HasSecondaryTarget>)>,
-) {
-    for e_adj in secondary_target_candidates(trigger.entity, &field, &target_query, &action_query) {
-        commands.entity(e_adj).insert(SecondTargettable);
+    for &e_cell in &can_target.cells {
+        commands.entity(e_cell).insert(Targettable);
     }
 }
 
