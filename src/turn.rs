@@ -19,6 +19,7 @@ use crate::{
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, SubStates)]
 #[source(GameState = GameState::InGame)]
 pub enum TurnState {
+    EnemySelect,
     PlayerStart,
     Player,
     PlayerBusy,
@@ -117,7 +118,7 @@ impl Plugin for TurnPlugin {
             )
             .add_systems(
                 Update,
-                (|| TurnState::PlayerStart)
+                (|| TurnState::EnemySelect)
                     .pipe(countdown_to_state::<1000, _>)
                     .run_if(in_state(TurnState::Neutral)),
             );
