@@ -3,9 +3,9 @@ use std::marker::PhantomData;
 use bevy::{color::palettes, prelude::*};
 
 use crate::{
-    actions::draw::{shuffle_selected_actions, DrawCount, DrawEvent},
-    damage::{apply_damage_events, Damage, DamageEvent, DamageVariant},
-    turn::{draw_actions, Cpu, Player, TurnState},
+    actions::draw::{DrawCount, DrawEvent, shuffle_selected_actions},
+    damage::{Damage, DamageEvent, DamageVariant, apply_damage_events},
+    turn::{Cpu, Player, TurnState, draw_actions},
 };
 
 pub struct StatusPlugin;

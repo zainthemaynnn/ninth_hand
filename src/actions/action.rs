@@ -9,8 +9,14 @@ pub struct ActionPlugin;
 impl Plugin for ActionPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<draw::DrawEvent>()
-            .add_observer(card::add_default_card_art)
             .add_systems(OnEnter(GameState::InGame), card::set_action_bar)
+            .add_systems(
+                Update,
+                (card::add_generic_card_art, card::estimate_text_color)
+                    .chain()
+                    .before(card::update_action_bar)
+                    .run_if(in_state(GameState::InGame)),
+            )
             .add_systems(
                 Update,
                 (
@@ -55,6 +61,7 @@ impl Plugin for ActionPlugin {
             );
     }
 }
+
 #[derive(Component, Default)]
 pub struct Action {
     pub name: &'static str,
@@ -74,6 +81,7 @@ pub struct OwnedByUnit(pub Entity);
 #[derive(Component, Debug)]
 #[relationship_target(relationship = OwnedByUnit)]
 pub struct OwnsAction(Vec<Entity>);
+
 #[derive(Component)]
 pub struct AvailableAction;
 

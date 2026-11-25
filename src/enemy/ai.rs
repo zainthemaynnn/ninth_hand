@@ -4,24 +4,33 @@ use rand::seq::IteratorRandom;
 use crate::{
     actions::{
         action::{Action, AvailableAction, OwnedByUnit, OwnsAction, Played, QueuedAction},
+        draw::shuffle_selected_actions,
         target::CanTarget,
     },
     director::Director,
     field::OccupyingCell,
-    turn::{Cpu, TurnState},
+    turn::{Cpu, TurnState, draw_actions},
 };
 
 pub struct AIPlugin;
 
 impl Plugin for AIPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(TurnState::EnemySelect), queue_random_action)
-            .add_systems(OnEnter(TurnState::CpuStart), play_actions)
-            .add_observer(target_random_unit);
+        app.add_systems(
+            OnEnter(TurnState::EnemySelect),
+            (
+                draw_actions::<Cpu>,
+                shuffle_selected_actions,
+                queue_random_action,
+            )
+                .chain(),
+        )
+        .add_systems(OnEnter(TurnState::CpuStart), play_actions)
+        .add_observer(target_random_unit);
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct RandomAi;
 
 pub fn queue_random_action(
@@ -30,6 +39,7 @@ pub fn queue_random_action(
     available_query: Query<(), With<AvailableAction>>,
     action_query: Query<&Action>,
 ) {
+    debug!("queueing");
     let mut rng = rand::rng();
     for owns_actions in unit_query {
         let actions = owns_actions
@@ -38,6 +48,7 @@ pub fn queue_random_action(
             .sample(&mut rng, 1);
 
         let Some(e_action) = actions.first() else {
+            info!("no actions in queue");
             continue;
         };
 

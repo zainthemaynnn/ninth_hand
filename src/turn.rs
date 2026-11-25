@@ -2,18 +2,18 @@ use std::{f32::consts::TAU, time::Duration};
 
 use bevy::{ecs::system::BoxedSystem, prelude::*};
 use bevy_asset_loader::prelude::*;
-use bevy_tweening::{lens::UiPositionLens, Lens, PlaybackState, Tween, TweenAnim};
+use bevy_tweening::{Lens, PlaybackState, Tween, TweenAnim, lens::UiPositionLens};
 
 use crate::{
     actions::{
         action::AvailableAction,
-        draw::{shuffle_selected_actions, DrawCount, DrawEvent},
+        draw::{DrawCount, DrawEvent, shuffle_selected_actions},
         target::{SecondaryTarget, Target},
     },
     asset::{GameState, UiRightLens},
     damage::Dead,
     systems::countdown_to_state,
-    ui::{wheel, UiRumble},
+    ui::{UiRumble, wheel},
 };
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash, Default, SubStates)]
@@ -85,8 +85,7 @@ impl Plugin for TurnPlugin {
             )
             .add_systems(
                 Update,
-                (|| TurnState::CpuStart)
-                    .pipe(countdown_to_state::<1000, _>)
+                countdown_to_state(TurnState::CpuStart, Duration::from_millis(1000))
                     .run_if(in_state(TurnState::PlayerDone)),
             )
             .add_systems(
@@ -105,8 +104,7 @@ impl Plugin for TurnPlugin {
             // placeholders for now
             .add_systems(
                 Update,
-                (|| TurnState::Neutral)
-                    .pipe(countdown_to_state::<1000, _>)
+                countdown_to_state(TurnState::Neutral, Duration::from_millis(1000))
                     .run_if(in_state(TurnState::Cpu)),
             )
             .add_systems(
@@ -118,8 +116,7 @@ impl Plugin for TurnPlugin {
             )
             .add_systems(
                 Update,
-                (|| TurnState::EnemySelect)
-                    .pipe(countdown_to_state::<1000, _>)
+                countdown_to_state(TurnState::EnemySelect, Duration::from_millis(1000))
                     .run_if(in_state(TurnState::Neutral)),
             );
     }

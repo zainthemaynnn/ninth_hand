@@ -10,7 +10,7 @@ use bevy::{
 use bevy_asset_loader::prelude::*;
 use bevy_hanabi::prelude::*;
 use bevy_tweening::{
-    lens::TransformPositionLens, AnimCompletedEvent, AnimTarget, Delay, Tween, TweenAnim,
+    AnimCompletedEvent, AnimTarget, Delay, Tween, TweenAnim, lens::TransformPositionLens,
 };
 
 use crate::{

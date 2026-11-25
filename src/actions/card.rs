@@ -1,10 +1,13 @@
 use std::time::Duration;
 
-use bevy::{ecs::relationship::Relationship, platform::collections::HashMap, prelude::*};
+use bevy::{
+    ecs::relationship::Relationship, platform::collections::HashMap, prelude::*,
+    text::FontSourceTemplate,
+};
 use bevy_asset_loader::prelude::*;
 use bevy_tweening::{
-    lens::{UiPositionLens, UiTransformRotationLens},
     AnimCompletedEvent, AnimTarget, PlaybackDirection, PlaybackState, Tween, TweenAnim, Tweenable,
+    lens::{UiPositionLens, UiTransformRotationLens},
 };
 
 use crate::{
@@ -27,12 +30,130 @@ pub struct SelectedCard;
 #[derive(Component)]
 pub struct CardArt(pub &'static str);
 
+#[derive(Component, Clone)]
+pub struct CardTextColor(pub TextColor);
+
+pub fn estimate_text_color(
+    mut commands: Commands,
+    card_assets: Res<CardAssets>,
+    images: Res<Assets<Image>>,
+    cards_query: Query<(Entity, &CardArt), Without<CardTextColor>>,
+) {
+    for (e_card, CardArt(art_key)) in &cards_query {
+        let Some(image_handle) = card_assets.card_art.get(*art_key) else {
+            commands
+                .entity(e_card)
+                .insert(CardTextColor(TextColor(Color::BLACK)));
+            continue;
+        };
+
+        let image = images
+            .get(image_handle)
+            .expect("card art image should be loaded");
+        let Some(pixels) = image.data.as_ref() else {
+            continue;
+        };
+
+        let (greyscale_sum, pixel_count) =
+            pixels
+                .chunks_exact(4)
+                .fold((0.0, 0usize), |(greyscale_sum, pixel_count), pixel| {
+                    let greyscale =
+                        (pixel[0] as f32 + pixel[1] as f32 + pixel[2] as f32) / (3.0 * 255.0);
+                    (greyscale_sum + greyscale, pixel_count + 1)
+                });
+        if pixel_count == 0 {
+            continue;
+        }
+
+        let average_greyscale = greyscale_sum / pixel_count as f32;
+        let text_color = if average_greyscale < 0.5 {
+            Color::WHITE
+        } else {
+            Color::BLACK
+        };
+        commands
+            .entity(e_card)
+            .insert(CardTextColor(TextColor(text_color)));
+    }
+}
+
+pub fn add_generic_card_art(
+    mut commands: Commands,
+    cards_query: Query<Entity, (With<Action>, Without<CardArt>)>,
+) {
+    for e_card in &cards_query {
+        commands.entity(e_card).insert(CardArt("generic_attack"));
+    }
+}
+
 #[derive(AssetCollection, Resource)]
 pub struct CardAssets {
     #[asset(path = "img/card_art", collection(typed, mapped))]
     pub card_art: HashMap<AssetFileStem, Handle<Image>>,
     #[asset(path = "img/patterns/nineslice", collection(typed, mapped))]
     pub patterns: HashMap<AssetFileStem, Handle<Image>>,
+}
+
+pub(crate) fn create_action_card(
+    action: &Action,
+    font: Handle<Font>,
+    color: TextColor,
+) -> impl Scene {
+    let name = action.name;
+    let description = action.description;
+    let description_font = font.clone();
+    let text_color = color.0;
+    bsn! {
+        Node {
+            position_type: PositionType::Relative,
+            height: Val::Px(240.0),
+            width: Val::Px(180.0),
+            bottom: Val::Percent(0.0),
+            justify_content: JustifyContent::Center,
+            align_items: AlignItems::Center,
+            flex_direction: FlexDirection::Column,
+            border_radius: BorderRadius::all(Val::Px(16.0)),
+        }
+        Children [
+            {
+                bsn! {
+                Text::new(name)
+                Node {
+                    width: Val::Percent(85.0),
+                    flex_shrink: 1.0,
+                }
+                TextFont {
+                    font: FontSourceTemplate::Handle({ font }),
+                    font_size: FontSize::Px(20.0),
+                }
+                TextLayout {
+                    justify: Justify::Center,
+                    linebreak: LineBreak::WordBoundary,
+                }
+                TextColor({ text_color })
+                }
+            },
+            {
+                bsn! {
+                Text::new(description)
+                Node {
+                    width: Val::Percent(85.0),
+                    flex_shrink: 1.0,
+                }
+                TextFont {
+                    font: FontSourceTemplate::Handle({ description_font }),
+                    font_size: FontSize::Px(16.0),
+                }
+                TextLayout {
+                    justify: Justify::Center,
+                    linebreak: LineBreak::WordBoundary,
+                }
+                TextColor({ text_color })
+                }
+            },
+        ]
+    }
 }
 
 /// The `Action` owning this card.
@@ -63,20 +184,6 @@ pub struct ActionBarOwnedByUnit(pub Entity);
 #[derive(Component, Debug)]
 #[relationship_target(relationship = ActionBarOwnedByUnit)]
 pub struct UnitOwnsActionBar(Entity);
-
-/// Give actions without explicitly assigned art a card art key based on their name.
-pub fn add_default_card_art(
-    trigger: On<Add, Action>,
-    mut commands: Commands,
-    action_query: Query<(&Action, Option<&CardArt>)>,
-) {
-    let Ok((action, None)) = action_query.get(trigger.entity) else {
-        return;
-    };
-
-    let art_key = action.name.to_lowercase().replace(" ", "").leak();
-    commands.entity(trigger.entity).insert(CardArt(art_key));
-}
 
 pub fn set_action_bar(
     mut commands: Commands,
@@ -136,16 +243,25 @@ pub fn set_action_bar(
 pub fn update_action_bar(
     mut commands: Commands,
     card_assets: Res<CardAssets>,
-    actions_query: Query<(Entity, &Action, &CardArt, &OwnedByUnit), Added<AvailableAction>>,
+    actions_query: Query<
+        (
+            Entity,
+            &Action,
+            Option<&CardTextColor>,
+            &CardArt,
+            &OwnedByUnit,
+        ),
+        Added<AvailableAction>,
+    >,
     unit_query: Query<(Option<&UnitFont>, &UnitOwnsActionBar)>,
 ) {
-    for (e_action, action, card_art, owned_by) in actions_query {
+    for (e_action, action, card_text_color, card_art, owned_by) in actions_query {
         let Ok((font, owns)) = unit_query.get(owned_by.get()) else {
             continue;
         };
 
         let font = font
-            .map(|unit_font| FontSource::Handle(unit_font.0.clone()))
+            .map(|unit_font| unit_font.0.clone())
             .unwrap_or_default();
         let mut selection_tween = TweenAnim::new(Tween::new(
             EaseFunction::QuadraticOut,
@@ -158,72 +274,29 @@ pub fn update_action_bar(
         .with_destroy_on_completed(false);
         selection_tween.stop();
 
+        let image = card_assets
+            .card_art
+            .get(card_art.0)
+            .expect(format!("missing card art {0}", card_art.0).as_str())
+            .clone();
+
         commands
-            .spawn_scene(bsn! {
-                Node {
-                    position_type: PositionType::Relative,
-                    height: Val::Px(240.0),
-                    width: Val::Px(180.0),
-                    bottom: Val::Percent(0.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    flex_direction: FlexDirection::Column,
-                    border_radius: BorderRadius::all(Val::Px(16.0)),
-                }
-            })
+            .spawn_scene(create_action_card(
+                action,
+                font,
+                card_text_color
+                    .map(|color| color.0.clone())
+                    .unwrap_or(TextColor(Color::BLACK)),
+            ))
             .insert((
                 ChildOf(owns.0),
                 ActionCard,
                 OwnedByAction(e_action),
-                ImageNode::new(
-                    card_assets
-                        .card_art
-                        .get(card_art.0)
-                        .expect(format!("missing card art {0}", card_art.0).as_str())
-                        .clone(),
-                ),
+                ImageNode::new(image),
                 Interaction::default(),
                 UiTransform::default(),
                 selection_tween,
-            ))
-            .with_children(|parent| {
-                parent.spawn((
-                    Text::new(action.name),
-                    Node {
-                        width: Val::Percent(85.0),
-                        flex_shrink: 1.0,
-                        ..default()
-                    },
-                    TextFont {
-                        font: font.clone(),
-                        font_size: FontSize::Px(20.0),
-                        ..default()
-                    },
-                    TextLayout {
-                        justify: Justify::Center,
-                        linebreak: LineBreak::WordBoundary,
-                    },
-                    TextColor(Color::WHITE),
-                ));
-                parent.spawn((
-                    Text::new(action.description),
-                    Node {
-                        width: Val::Percent(85.0),
-                        flex_shrink: 1.0,
-                        ..default()
-                    },
-                    TextFont {
-                        font: font.clone(),
-                        font_size: FontSize::Px(16.0),
-                        ..default()
-                    },
-                    TextLayout {
-                        justify: Justify::Center,
-                        linebreak: LineBreak::WordBoundary,
-                    },
-                    TextColor(Color::WHITE),
-                ));
-            });
+            ));
     }
 }
 

@@ -1,7 +1,11 @@
 use bevy::{color::palettes, math::VectorSpace, prelude::*};
 
 use crate::{
-    actions::draw::DrawCount,
+    actions::{
+        action::{Action, OwnedByUnit, QueuedAction},
+        card::{self, CardArt, CardAssets, CardTextColor},
+        draw::DrawCount,
+    },
     asset::{AnimatorInitializer, GameState},
     damage::{DamageAssets, DamageBuffer, DamageVariant, Health, HealthCap, Resist},
     field::{Field, HexCoord, HoveredCell, MovementStack, OccupiedByUnit, OccupyingCell},
@@ -23,11 +27,14 @@ impl Plugin for UnitPlugin {
                 ),
             )
             .add_observer(show_unit_details)
+            .add_observer(show_queued_action_card)
             .add_observer(hide_unit_details)
+            .add_observer(hide_queued_action_card)
             .add_observer(show_unit_health)
             .add_observer(show_unit_resist)
             .add_observer(show_unit_text)
             .add_observer(select_unit)
+            .add_observer(deselect_unit_on_cell_unhover)
             .add_observer(enforce_one::<HoveredUnit>);
     }
 }
@@ -77,6 +84,9 @@ pub fn reposition<T: Team + Component>(
 #[derive(Component, Debug, Clone, Default)]
 pub struct UnitDetailsWindow;
 
+#[derive(Component, Clone, FromTemplate)]
+pub struct QueuedActionWindow;
+
 #[derive(Component, Debug, Clone, FromTemplate)]
 pub struct HealthBar;
 
@@ -112,13 +122,12 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
             top: Val::ZERO,
             right: Val::ZERO,
             margin: UiRect::all(Val::Px(8.0)),
-            padding: UiRect::all(Val::Px(8.0)),
             flex_direction: FlexDirection::Row,
             align_items: AlignItems::Center,
             height: Val::Px(160.0),
             column_gap: Val::Px(8.0),
         }
-        BackgroundColor({ palettes::basic::BLACK.with_alpha(0.5) })
+        BackgroundColor(Color::NONE)
 
         Children [
             // (
@@ -132,99 +141,181 @@ pub fn spawn_unit_details_window(mut commands: Commands, damage_assets: Res<Dama
             // ),
 
             (
-                #ResistValues
+                #QueuedActionWindow
+                QueuedActionWindow
                 Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::RowReverse,
-                    align_items: AlignItems::Center,
+                    display: Display::None,
+                    width: Val::Px(180.0),
+                    height: Val::Px(240.0),
+                    flex_shrink: 0.0,
                 }
+            ),
+
+            (
+                Node {
+                    position_type: PositionType::Relative,
+                    display: Display::Flex,
+                    flex_direction: FlexDirection::Row,
+                    align_items: AlignItems::Center,
+                    height: Val::Percent(100.0),
+                    padding: UiRect::all(Val::Px(8.0)),
+                    column_gap: Val::Px(8.0),
+                }
+                BackgroundColor({ palettes::basic::BLACK.with_alpha(0.5) })
                 Children [
                     {
-                        resist_values.iter().map(|resist_values_col| {
-                            bsn! {
-                                Node {
-                                    display: Display::Flex,
-                                    flex_direction: FlexDirection::Column,
-                                }
-                                Children [
-                                    {
-                                        resist_values_col.iter().map(|damage_ty| {
-                                            bsn! {
-                                                Node {
-                                                    display: Display::Flex,
-                                                    flex_direction: FlexDirection::Row,
-                                                    padding: UiRect::all(Val::Px(4.0)),
-                                                }
-                                                Children [
-                                                    (
-                                                        Node {
-                                                            height: Val::Px(28.0),
-                                                            aspect_ratio: { Some(1.0) },
-                                                        }
-                                                        ImageNode {
-                                                            image: { damage_assets.icon_from_damage_variant(*damage_ty).unwrap().clone() },
-                                                            color: { damage_ty.color() },
-                                                        }
-                                                    ),
-                                                    (
-                                                        UnitResistDetailsVariant({*damage_ty})
-                                                        Text::new("1.0x")
-                                                        TextColor
-                                                    )
-                                                ]
-                                            }
-                                        }).collect::<Vec<_>>()
-                                    }
-                                ]
+                        bsn! {
+                            #ResistValues
+                            Node {
+                                display: Display::Flex,
+                                flex_direction: FlexDirection::RowReverse,
+                                align_items: AlignItems::Center,
                             }
-                        }).collect::<Vec<_>>()
+                            Children [
+                                {
+                                    resist_values.iter().map(|resist_values_col| {
+                                        bsn! {
+                                            Node {
+                                                display: Display::Flex,
+                                                flex_direction: FlexDirection::Column,
+                                            }
+                                            Children [
+                                                {
+                                                    resist_values_col.iter().map(|damage_ty| {
+                                                        bsn! {
+                                                            Node {
+                                                                display: Display::Flex,
+                                                                flex_direction: FlexDirection::Row,
+                                                                padding: UiRect::all(Val::Px(4.0)),
+                                                            }
+                                                            Children [
+                                                                (
+                                                                    Node {
+                                                                        height: Val::Px(28.0),
+                                                                        aspect_ratio: { Some(1.0) },
+                                                                    }
+                                                                    ImageNode {
+                                                                        image: { damage_assets.icon_from_damage_variant(*damage_ty).unwrap().clone() },
+                                                                        color: { damage_ty.color() },
+                                                                    }
+                                                                ),
+                                                                (
+                                                                    UnitResistDetailsVariant({*damage_ty})
+                                                                    Text::new("1.0x")
+                                                                    TextColor
+                                                                )
+                                                            ]
+                                                        }
+                                                    }).collect::<Vec<_>>()
+                                                }
+                                            ]
+                                        }
+                                    }).collect::<Vec<_>>()
+                                }
+                            ]
+                        }
                     }
-                ]
-            ),
 
-            (
-                #Text
-                Node {
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Column,
-                    width: Val::Px(400.0),
-                }
-                Children [
                     (
-                        #Name
-                        UnitName
-                        Text::new("Mortal")
-                        TextFont { font_size: { FontSize::Px(24.0) } }
+                        #Text
+                        Node {
+                            display: Display::Flex,
+                            flex_direction: FlexDirection::Column,
+                            width: Val::Px(400.0),
+                        }
+                        Children [
+                            (
+                                #Name
+                                UnitName
+                                Text::new("Mortal")
+                                TextFont { font_size: { FontSize::Px(24.0) } }
+                            ),
+                            (
+                                #UnitDescription
+                                UnitDescription
+                                Text::new("A useless mortal.")
+                            ),
+                            (
+                                #UnitFlavor
+                                UnitFlavor
+                                Text::new("\"I'm just a guy.\"")
+                                TextColor({ palettes::css::GRAY })
+                                TextFont { font_size: { FontSize::Px(16.0) } }
+                            )
+                        ]
                     ),
-                    (
-                        #UnitDescription
-                        UnitDescription
-                        Text::new("A useless mortal.")
-                    ),
-                    (
-                        #UnitFlavor
-                        UnitFlavor
-                        Text::new("\"I'm just a guy.\"")
-                        TextColor({ palettes::css::GRAY })
-                        TextFont { font_size: { FontSize::Px(16.0) } }
-                    )
-                ]
-            ),
 
-            (
-                #HealthBar
-                HealthBar
-                Node {
-                    position_type: PositionType::Absolute,
-                    top: Val::Percent(100.0),
-                    width: Val::Percent(100.0),
-                    left: Val::ZERO,
-                    height: Val::Px(10.0),
-                }
-                BackgroundColor(Color::from(palettes::basic::RED))
+                    (
+                        #HealthBar
+                        HealthBar
+                        Node {
+                            position_type: PositionType::Absolute,
+                            top: Val::Percent(100.0),
+                            width: Val::Percent(100.0),
+                            left: Val::ZERO,
+                            height: Val::Px(10.0),
+                        }
+                        BackgroundColor(Color::from(palettes::basic::RED))
+                    ),
+                ]
             ),
         ]
     });
+}
+
+pub fn show_queued_action_card(
+    trigger: On<Add, HoveredUnit>,
+    mut commands: Commands,
+    card_assets: Res<CardAssets>,
+    mut card_window_query: Query<(Entity, &mut Node), With<QueuedActionWindow>>,
+    action_query: Query<
+        (&Action, Option<&CardTextColor>, &CardArt, &OwnedByUnit),
+        With<QueuedAction>,
+    >,
+    unit_font_query: Query<Option<&UnitFont>>,
+) {
+    let (e_card_window, mut card_window_node) = card_window_query.single_mut().unwrap();
+    commands.entity(e_card_window).despawn_related::<Children>();
+
+    let Some((action, card_text_color, card_art, _)) = action_query
+        .iter()
+        .find(|(_, _, _, owned_by)| owned_by.0 == trigger.entity)
+    else {
+        card_window_node.display = Display::None;
+        return;
+    };
+
+    let font = unit_font_query
+        .get(trigger.entity)
+        .unwrap()
+        .map(|unit_font| unit_font.0.clone())
+        .unwrap_or_default();
+    let image = card_assets
+        .card_art
+        .get(card_art.0)
+        .expect(format!("missing card art {0}", card_art.0).as_str())
+        .clone();
+
+    card_window_node.display = Display::Flex;
+    commands
+        .spawn_scene(card::create_action_card(
+            action,
+            font,
+            card_text_color
+                .map(|color| color.0.clone())
+                .unwrap_or(TextColor(Color::BLACK)),
+        ))
+        .insert((ChildOf(e_card_window), ImageNode::new(image)));
+}
+
+pub fn hide_queued_action_card(
+    _trigger: On<Remove, HoveredUnit>,
+    mut commands: Commands,
+    mut card_window_query: Query<(Entity, &mut Node), With<QueuedActionWindow>>,
+) {
+    let (e_card_window, mut card_window_node) = card_window_query.single_mut().unwrap();
+    card_window_node.display = Display::None;
+    commands.entity(e_card_window).despawn_related::<Children>();
 }
 
 pub fn show_unit_details(
@@ -323,41 +414,55 @@ pub fn select_unit(
     }
 }
 
-pub fn spawn_at_location<T: UnitType + Default>(
-    In(coord): In<HexCoord>,
+pub fn deselect_unit_on_cell_unhover(
+    trigger: On<Remove, HoveredCell>,
     mut commands: Commands,
-    field: Res<Field<Player>>,
-    assets: Res<T::ModelResource>,
-    mut graphs: ResMut<Assets<AnimationGraph>>,
-) -> Result<Entity> {
-    let Some(e_cell) = field.cells.get(&coord) else {
-        let err = BevyError::new(
-            Severity::Error,
-            format!("coord {:?} not found in field cells", coord),
-        );
-        return Err(err);
+    cell_query: Query<Option<&OccupiedByUnit>>,
+) {
+    let Ok(Some(occupied_by)) = cell_query.get(trigger.entity) else {
+        return;
     };
 
-    info!("spawn success at {:?}", coord);
+    commands.entity(occupied_by.get()).remove::<HoveredUnit>();
+}
 
-    let mut graph = AnimationGraph::new();
-    let animations = T::Animations::new(&assets, &mut graph);
+pub fn spawn_at_location<T: UnitType + Default, F: Team>(
+    coord: HexCoord,
+) -> impl bevy::ecs::system::System<In = (), Out = Result<Entity>> {
+    IntoSystem::into_system(
+        move |mut commands: Commands,
+              field: Res<Field<F>>,
+              assets: Res<T::ModelResource>,
+              mut graphs: ResMut<Assets<AnimationGraph>>| {
+            let Some(e_cell) = field.cells.get(&coord) else {
+                return Err(BevyError::new(
+                    Severity::Error,
+                    format!("coord {:?} not found in field cells", coord),
+                ));
+            };
 
-    let mut entity = commands.spawn((
-        T::default(),
-        WorldAssetRoot(assets.model_handle()),
-        OccupyingCell(*e_cell),
-        AnimatorInitializer {
-            graph: graphs.add(graph),
-            idle: animations.idle(),
+            info!("spawn success at {:?}", coord);
+
+            let mut graph = AnimationGraph::new();
+            let animations = T::Animations::new(&assets, &mut graph);
+
+            let mut entity = commands.spawn((
+                T::default(),
+                WorldAssetRoot(assets.model_handle()),
+                OccupyingCell(*e_cell),
+                AnimatorInitializer {
+                    graph: graphs.add(graph),
+                    idle: animations.idle(),
+                },
+            ));
+
+            if let Some(h_font) = assets.font_handle() {
+                entity.insert(UnitFont(h_font));
+            }
+
+            Ok(entity.id())
         },
-    ));
-
-    if let Some(h_font) = assets.font_handle() {
-        entity.insert(UnitFont(h_font));
-    }
-
-    Ok(entity.id())
+    )
 }
 
 pub trait UnitAssetResource: Resource {

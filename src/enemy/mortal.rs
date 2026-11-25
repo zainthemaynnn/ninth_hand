@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_asset_loader::prelude::*;
 
 use crate::{
     actions::{
@@ -7,12 +8,21 @@ use crate::{
         target::Target,
     },
     damage::{Damage, DamageEvent, DamageVariant, Health, HealthCap},
+    enemy::ai::RandomAi,
     field::OccupiedByUnit,
     turn::Cpu,
-    unit::{Unit, UnitDesc},
+    unit::{Unit, UnitAnimations, UnitAssetResource, UnitDesc, UnitType},
 };
 
-#[derive(Component)]
+#[derive(AssetCollection, Resource)]
+pub struct MortalAssets {
+    #[asset(path = "gltf/enemy/mortal.glb#Scene0")]
+    pub mortal: Handle<WorldAsset>,
+    #[asset(path = "gltf/enemy/mortal.glb#Animation0")]
+    pub idle: Handle<AnimationClip>,
+}
+
+#[derive(Component, Default)]
 #[require(
     Unit,
     Cpu,
@@ -23,8 +33,39 @@ use crate::{
     },
     Health(999.0),
     HealthCap(999.0),
+    RandomAi,
 )]
 pub struct Mortal;
+
+impl UnitAssetResource for MortalAssets {
+    fn model_handle(&self) -> Handle<WorldAsset> {
+        self.mortal.clone()
+    }
+}
+
+#[derive(Component)]
+pub struct MortalAnimations {
+    pub idle: AnimationNodeIndex,
+}
+
+impl UnitAnimations for MortalAnimations {
+    type Assets = MortalAssets;
+
+    fn new(assets: &Self::Assets, graph: &mut AnimationGraph) -> Self {
+        Self {
+            idle: graph.add_clip(assets.idle.clone(), 1.0, graph.root),
+        }
+    }
+
+    fn idle(&self) -> Option<Vec<AnimationNodeIndex>> {
+        Some(vec![self.idle])
+    }
+}
+
+impl UnitType for Mortal {
+    type ModelResource = MortalAssets;
+    type Animations = MortalAnimations;
+}
 
 #[derive(Component)]
 #[require(

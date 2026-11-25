@@ -55,25 +55,29 @@ pub fn uninsert_on_unhover<T: Component + Default, F: QueryFilter>(
     }
 }
 
-/// Moves to the input state after a timer.
-pub fn countdown_to_state<const T: u64, S: FreelyMutableState>(
-    In(state): In<S>,
-    time: Res<Time>,
-    mut my_timer: Local<Timer>,
-    mut initialized: Local<bool>,
-    mut next_state: ResMut<NextState<S>>,
-) {
-    if !*initialized {
-        *my_timer = Timer::new(Duration::from_millis(T), TimerMode::Once);
-        *initialized = true;
-    }
+/// Moves to `state` after `duration`.
+pub fn countdown_to_state<S: FreelyMutableState>(
+    state: S,
+    duration: Duration,
+) -> bevy::ecs::system::BoxedSystem {
+    Box::new(IntoSystem::into_system(
+        move |time: Res<Time>,
+              mut my_timer: Local<Timer>,
+              mut initialized: Local<bool>,
+              mut next_state: ResMut<NextState<S>>| {
+            if !*initialized {
+                *my_timer = Timer::new(duration, TimerMode::Once);
+                *initialized = true;
+            }
 
-    my_timer.tick(time.delta());
+            my_timer.tick(time.delta());
 
-    if my_timer.just_finished() {
-        *initialized = false;
-        next_state.set(state);
-    }
+            if my_timer.just_finished() {
+                *initialized = false;
+                next_state.set(state.clone());
+            }
+        },
+    ))
 }
 
 pub fn clear_all<T: Component>(mut commands: Commands, t_query: Query<Entity, With<T>>) {

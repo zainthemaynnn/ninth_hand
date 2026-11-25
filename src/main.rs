@@ -4,7 +4,7 @@
 
 use bevy::{
     color::palettes::css::SILVER,
-    gltf::{convert_coordinates::GltfConvertCoordinates, GltfPlugin},
+    gltf::{GltfPlugin, convert_coordinates::GltfConvertCoordinates},
     post_process::bloom::Bloom,
     prelude::*,
 };
@@ -15,13 +15,13 @@ use crate::{
     actions::action::{ActionPlugin, ActionType, OwnedByUnit},
     asset::{GameState, NineAssetPlugin},
     character::{
-        animus::Animus, carty::Carty, fractal::Fractal, grease::Grease, impi::Impi, nine::Nine,
-        presence::Presence, symmetra::Symmetra, CharacterPlugins,
+        CharacterPlugins, animus::Animus, carty::Carty, fractal::Fractal, grease::Grease,
+        impi::Impi, nine::Nine, presence::Presence, symmetra::Symmetra,
     },
     damage::DamagePlugin,
     director::DirectorPlugin,
-    enemy::{mortal::Mortal, EnemyAssets, EnemyPlugin},
-    field::{load_field, Field, FieldPlugin, HexCoord, OccupyingCell},
+    enemy::{EnemyPlugin, mortal::Mortal},
+    field::{FieldPlugin, HexCoord, load_field},
     status::StatusPlugin,
     turn::{Cpu, Player, TurnPlugin},
     ui::NineUiPlugin,
@@ -87,35 +87,31 @@ fn main() {
                     )
                 })
                 .pipe(load_field::<Cpu>),
-                (|| HexCoord::new(0, 0))
-                    // ??? why do I need to annotate this at all?
-                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Nine>)
+                crate::unit::spawn_at_location::<Nine, Player>(HexCoord::new(0, 0))
                     .pipe(character::nine::spawn_with_hand),
-                (|| HexCoord::new(2, -1))
-                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Symmetra>)
-                    .pipe(|e_symmetra: In<Result<Entity>>, mut commands: Commands| {
+                crate::unit::spawn_at_location::<Symmetra, Player>(HexCoord::new(2, -1)).pipe(
+                    |e_symmetra: In<Result<Entity>>, mut commands: Commands| {
                         commands
                             .entity(*e_symmetra.as_ref().unwrap())
                             .observe(character::symmetra::setup_symmetra_model);
-                    }),
-                (|| HexCoord::new(-2, 1))
-                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Impi>)
+                    },
+                ),
+                crate::unit::spawn_at_location::<Impi, Player>(HexCoord::new(-2, 1))
                     .pipe(|_in: In<Result<Entity>>| {}),
-                (|| HexCoord::new(-2, -1))
-                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Animus>)
+                crate::unit::spawn_at_location::<Animus, Player>(HexCoord::new(-2, -1))
                     .pipe(|_in: In<Result<Entity>>| {}),
-                (|| HexCoord::new(2, -3))
-                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Grease>)
+                crate::unit::spawn_at_location::<Grease, Player>(HexCoord::new(2, -3))
                     .pipe(|_in: In<Result<Entity>>| {}),
-                (|| HexCoord::new(-1, -3))
-                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Presence>)
+                crate::unit::spawn_at_location::<Presence, Player>(HexCoord::new(-1, -3))
                     .pipe(character::presence::spawn_presence_smoke),
-                (|| HexCoord::new(0, -2))
-                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Carty>)
+                crate::unit::spawn_at_location::<Carty, Player>(HexCoord::new(0, -2))
                     .pipe(character::carty::spawn_flame),
-                (|| HexCoord::new(1, -4))
-                    .pipe::<_, _, Result<Entity>, _>(crate::unit::spawn_at_location::<Fractal>)
+                crate::unit::spawn_at_location::<Fractal, Player>(HexCoord::new(1, -4))
                     .pipe(character::fractal::spawn_fractal_head),
+                crate::unit::spawn_at_location::<Mortal, Cpu>(HexCoord::new(1, -1))
+                    .pipe(|_in: In<Result<Entity>>| {}),
+                crate::unit::spawn_at_location::<Mortal, Cpu>(HexCoord::new(0, -3))
+                    .pipe(|_in: In<Result<Entity>>| {}),
                 entry.before(actions::card::set_action_bar),
             )
                 .chain(),
@@ -160,8 +156,7 @@ fn entry(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    enemy_assets: Res<EnemyAssets>,
-    cpu_field: Res<Field<Cpu>>,
+    mortal_query: Query<Entity, With<Mortal>>,
     nine_query: Single<Entity, With<Nine>>,
     symmetra_query: Single<Entity, With<Symmetra>>,
     impi_query: Single<Entity, With<Impi>>,
@@ -193,23 +188,9 @@ fn entry(
         Transform::from_xyz(24.0, 24.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    let e_cell = cpu_field.cells.get(&HexCoord::new(1, -1)).unwrap();
-    let e_mortal = commands
-        .spawn((
-            WorldAssetRoot(enemy_assets.mortal.clone()),
-            Mortal,
-            OccupyingCell(*e_cell),
-        ))
-        .id();
-
-    let e_cell2 = cpu_field.cells.get(&HexCoord::new(0, -3)).unwrap();
-    let e_mortal2 = commands
-        .spawn((
-            WorldAssetRoot(enemy_assets.mortal.clone()),
-            Mortal,
-            OccupyingCell(*e_cell2),
-        ))
-        .id();
+    let mut mortals = mortal_query.iter();
+    let e_mortal = mortals.next().unwrap();
+    let e_mortal2 = mortals.next().unwrap();
 
     let e_nine = nine_query.into_inner();
 
